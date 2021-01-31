@@ -1,4 +1,4 @@
-use libffi::low;
+use libffi::middle;
 use num_derive::FromPrimitive;    
 use num_traits::FromPrimitive;
 use std::ffi::CString;
@@ -32,17 +32,39 @@ pub enum FfiType {
     VOID = 0,
 }
 
-struct ForeignFn {
-    cif: low::ffi_cif,
-    fn_ptr: low::CodePtr,
-    return_type: FfiType,
-    arg_types: Vec<FfiType>,
-    _arg_types_native: Vec<*mut low::ffi_type>,
+impl FfiType {
+    fn to_libffi_type(&self) -> middle::Type {
+        match *self {
+            FfiType::DOUBLE => middle::Type::f64(),
+            FfiType::FLOAT => middle::Type::f32(),
+            FfiType::LONGDOUBLE => middle::Type::f64(),
+            FfiType::POINTER => middle::Type::pointer(),
+            FfiType::SINT16 => middle::Type::i16(),
+            FfiType::SINT32 => middle::Type::i32(),
+            FfiType::SINT64 => middle::Type::i64(),
+            FfiType::SINT8 => middle::Type::i8(),
+            FfiType::UINT16 => middle::Type::u16(),
+            FfiType::UINT32 => middle::Type::u32(),
+            FfiType::UINT64 => middle::Type::u64(),
+            FfiType::UINT8 => middle::Type::u8(),
+            FfiType::VOID => middle::Type::void(),
+        }
+    }
 }
 
+struct ForeignFn {
+    cif: middle::Cif,
+    n_args: usize,
+    fn_ptr: middle::CodePtr,
+    return_type: FfiType,
+    arg_types: Vec<FfiType>,
+}
+
+// TODO make WebAssembly responsible for more of the work creating structs etc. by making it pass pointers to libffi-rs types instead?
+
 impl ForeignFn {
-    unsafe fn call<R>(&mut self, arguments: *mut *mut c_void) -> R {
-        low::call(&mut self.cif, self.fn_ptr, arguments)
+    unsafe fn call<R>(&mut self, arguments: &[middle::Arg]) -> R {
+        self.cif.call(self.fn_ptr, arguments)
     }
 }
 
@@ -57,57 +79,36 @@ impl FnTable {
        self.0.contains_key(&function) 
     }
 
-    pub fn register_fn(&mut self, function: String, library: String, n_args: usize, return_type_int: i32, arg_type_ints: &[i32]) -> error::Result<()> {
+    pub fn register_fn(&mut self, function: String, library: String, return_type_int: i32, arg_type_ints: &[i32]) -> error::Result<()> {
         if self.has_fn(function.clone()) {
             return Ok(());
         }
 
-        let mut cif: low::ffi_cif = Default::default();
         let return_type = FfiType::from_i32(return_type_int).ok_or(error::Error::InvalidType(return_type_int))?;
-        let return_type_native = unsafe {ffitype_to_native(return_type)};
+        let libffi_return_type = return_type.to_libffi_type();
 
         let mut arg_types: Vec<FfiType> = Vec::new();
-        let mut arg_types_native: Vec<*mut low::ffi_type> = Vec::new();
+        let mut libffi_arg_types: Vec<middle::Type> = Vec::new();
 
         for arg in arg_type_ints {
             let arg_type = FfiType::from_i32(*arg).ok_or(error::Error::InvalidType(*arg))?;
             arg_types.push(arg_type);
-            arg_types_native.push(unsafe {ffitype_to_native(arg_type)});
+            libffi_arg_types.push(arg_type.to_libffi_type());
         }
 
-        unsafe {
-            low::prep_cif(&mut cif, low::ffi_abi_FFI_DEFAULT_ABI, n_args, return_type_native, arg_types_native.as_mut_ptr())?;
-        }
+        let cif = middle::Cif::new(libffi_arg_types.into_iter(), libffi_return_type);
 
         let fn_ptr = get_fn_ptr(function.as_str(), library.as_str())?;
 
-        self.0.insert(function, ForeignFn{cif: cif, fn_ptr: low::CodePtr(fn_ptr), return_type: return_type, arg_types: arg_types, _arg_types_native: arg_types_native});
+        self.0.insert(function, ForeignFn{cif: cif, fn_ptr: middle::CodePtr(fn_ptr), n_args: arg_types.len(), return_type: return_type, arg_types: arg_types});
 
         Ok(())
     }
 
-    pub unsafe fn call_fn<R>(&mut self, function: String, arguments: *mut *mut c_void) -> error::Result<R> {
+    pub unsafe fn call_fn<R>(&mut self, function: String, arguments: &[middle::Arg]) -> error::Result<R> {
         let foreign_fn = self.0.get_mut(&function).ok_or(error::Error::FunctionNotDefined(function))?;
 
         Ok(foreign_fn.call(arguments))
-    }
-}
-
-unsafe fn ffitype_to_native(in_type: FfiType) -> *mut low::ffi_type {
-    match in_type {
-        FfiType::DOUBLE => &mut low::types::double,
-        FfiType::FLOAT => &mut low::types::float,
-        FfiType::LONGDOUBLE => &mut low::types::longdouble,
-        FfiType::POINTER => &mut low::types::pointer,
-        FfiType::SINT16 => &mut low::types::sint16,
-        FfiType::SINT32 => &mut low::types::sint32,
-        FfiType::SINT64 => &mut low::types::sint64,
-        FfiType::SINT8 => &mut low::types::sint8,
-        FfiType::UINT16 => &mut low::types::uint16,
-        FfiType::UINT32 => &mut low::types::uint32,
-        FfiType::UINT64 => &mut low::types::uint64,
-        FfiType::UINT8 => &mut low::types::uint8,
-        FfiType::VOID => &mut low::types::void,
     }
 }
 
@@ -163,11 +164,11 @@ mod tests {
             let args = [FfiType::POINTER as i32, FfiType::UINT64 as i32, FfiType::UINT32 as i32, FfiType::UINT32 as i32];
             let free_args = [FfiType::POINTER as i32, FfiType::UINT64 as i32, FfiType::UINT32 as i32];
 
-            fn_table.register_fn(String::from("VirtualAlloc"), String::from("kernel32.dll"), 4, FfiType::POINTER as i32, &args).unwrap();
-            fn_table.register_fn(String::from("VirtualFree"), String::from("kernel32.dll"), 3, FfiType::POINTER as i32, &free_args).unwrap();
+            fn_table.register_fn(String::from("VirtualAlloc"), String::from("kernel32.dll"), FfiType::POINTER as i32, &args).unwrap();
+            fn_table.register_fn(String::from("VirtualFree"), String::from("kernel32.dll"), FfiType::POINTER as i32, &free_args).unwrap();
 
             unsafe {
-                let mut ptr: *mut u64 = fn_table.call_fn(String::from("VirtualAlloc"), vec![&mut ptr::null::<c_void>() as *mut _ as *mut c_void, &mut 8u64 as *mut _ as *mut c_void, &mut (0x00001000u32 | 0x00002000u32) as *mut _ as *mut c_void, &mut 0x04u32 as *mut _ as *mut c_void].as_mut_ptr()).unwrap();
+                let ptr: *mut u64 = fn_table.call_fn(String::from("VirtualAlloc"), vec![middle::arg(&ptr::null::<c_void>()), middle::arg(&8u64), middle::arg(&(0x00001000u32 | 0x00002000u32)), middle::arg(&0x04u32)].as_slice()).unwrap();
 
                 assert_eq!(false, ptr.is_null());
                 assert_eq!(0u64, *ptr, "Newly allocated memory is not 0, as guaranteed by VirtualAlloc.");
@@ -178,7 +179,7 @@ mod tests {
                 assert_eq!(9u64, *ptr, "Unable to write and/or read pointer from VirtualAlloc.");
 
                 println!("4");
-                let return_value: i32 = fn_table.call_fn(String::from("VirtualFree"), vec![&mut ptr as *mut _ as *mut c_void, &mut 0u64 as *mut _ as *mut c_void, &mut 0x00008000u32 as *mut _ as *mut c_void].as_mut_ptr()).unwrap();
+                let return_value: i32 = fn_table.call_fn(String::from("VirtualFree"), vec![middle::arg(&ptr), middle::arg(&0u64), middle::arg(&0x00008000u32)].as_slice()).unwrap();
 
                 assert_ne!(0i32, return_value, "VirtualFree returned 0, indicating an error in freeing the memory.");
             };

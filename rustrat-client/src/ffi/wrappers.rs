@@ -1,4 +1,5 @@
 use std::ffi::{CStr, c_void};
+use libffi::middle;
 
 use super::{FfiType, FnTable};
 
@@ -76,7 +77,7 @@ pub unsafe extern "C" fn register_fn_wrapper(
     }
 
     i32::push_on_stack(
-        match fn_table.register_fn(String::from(fn_str), String::from(library_str), n_args, return_type_int, arg_type_ints.as_slice()) {
+        match fn_table.register_fn(String::from(fn_str), String::from(library_str), return_type_int, arg_type_ints.as_slice()) {
             Ok(_) => 1,
             Err(_) => 0,
         },
@@ -116,71 +117,71 @@ pub unsafe extern "C" fn call_fn_wrapper(
             return ::wasm3::wasm3_sys::m3Err_none as _;
         },
     };
-    let mut args: Vec<*mut c_void> = Vec::new();
+    let mut args: Vec<middle::Arg> = Vec::new();
 
-    for i in 0..foreign_fn.cif.nargs as isize {
+    for i in 0..foreign_fn.n_args as isize {
         let arg: *mut c_void = args_ptr.offset(i) ;
         args.push(match foreign_fn.arg_types[i as usize] {
-            FfiType::POINTER => mem.offset(*(arg as *const i32) as isize) as *mut c_void,
-            _ => arg,
+            FfiType::POINTER => middle::arg(&(mem.offset(*(arg as *const i32) as isize) as *mut c_void)),
+            _ => middle::arg(&arg),
         });
     }
 
     match foreign_fn.return_type {
         FfiType::DOUBLE => {
-            let return_value: f64 = foreign_fn.call(args.as_mut_ptr());
+            let return_value: f64 = foreign_fn.call(args.as_slice());
             f64::push_on_stack(return_value, return_sp);
         },
         FfiType::FLOAT => {
-            let return_value: f32 = foreign_fn.call(args.as_mut_ptr());
+            let return_value: f32 = foreign_fn.call(args.as_slice());
             f32::push_on_stack(return_value, return_sp);
         },
         FfiType::LONGDOUBLE => {
             // Could  possibly be something more than 64 bits? (80 bits)
-            let return_value: f64 = foreign_fn.call(args.as_mut_ptr());
+            let return_value: f64 = foreign_fn.call(args.as_slice());
             f64::push_on_stack(return_value, return_sp);
         },
         FfiType::POINTER => {
-            let return_value: u64 = foreign_fn.call(args.as_mut_ptr());
+            let return_value: u64 = foreign_fn.call(args.as_slice());
             u64::push_on_stack(return_value, return_sp);
         },
         FfiType::SINT16 => {
             // wasm3-rs support to push things smaller than 32 bits? Is it even possible?
-            let return_value: i16 = foreign_fn.call(args.as_mut_ptr());
+            let return_value: i16 = foreign_fn.call(args.as_slice());
             i32::push_on_stack(return_value as i32, return_sp);
         },
         FfiType::SINT32 => {
-            let return_value: i32 = foreign_fn.call(args.as_mut_ptr());
+            let return_value: i32 = foreign_fn.call(args.as_slice());
             i32::push_on_stack(return_value, return_sp);
         },
         FfiType::SINT64 => {
-            let return_value: i64 = foreign_fn.call(args.as_mut_ptr());
+            let return_value: i64 = foreign_fn.call(args.as_slice());
             i64::push_on_stack(return_value, return_sp);
         },
         FfiType::SINT8 => {
-            let return_value: i8 = foreign_fn.call(args.as_mut_ptr());
+            let return_value: i8 = foreign_fn.call(args.as_slice());
             i32::push_on_stack(return_value as i32, return_sp);
         },
         FfiType::UINT16 => {
-            let return_value: u16 = foreign_fn.call(args.as_mut_ptr());
+            let return_value: u16 = foreign_fn.call(args.as_slice());
             u32::push_on_stack(return_value as u32, return_sp);
         },
         FfiType::UINT32 => {
-            let return_value: u32 = foreign_fn.call(args.as_mut_ptr());
+            let return_value: u32 = foreign_fn.call(args.as_slice());
             u32::push_on_stack(return_value, return_sp);
         },
         FfiType::UINT64 => {
-            let return_value: u64 = foreign_fn.call(args.as_mut_ptr());
+            let return_value: u64 = foreign_fn.call(args.as_slice());
             u64::push_on_stack(return_value, return_sp);
         },
         FfiType::UINT8 => {
-            let return_value: u8 = foreign_fn.call(args.as_mut_ptr());
+            let return_value: u8 = foreign_fn.call(args.as_slice());
             u32::push_on_stack(return_value as u32, return_sp);
         },
         FfiType::VOID => {
             // Void, lets try to read a 32 bit int and hope nothing bad happens...
             // Pushing 0 on the WebAssembly stack to keep it happy
-            let _: i32 = foreign_fn.call(args.as_mut_ptr());
+            let _: i32 = foreign_fn.call(args.as_slice());
             i32::push_on_stack(0, return_sp);
         },
     };
