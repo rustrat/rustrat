@@ -63,7 +63,7 @@ struct ForeignFn {
 // TODO make WebAssembly responsible for more of the work creating structs etc. by making it pass pointers to libffi-rs types instead?
 
 impl ForeignFn {
-    unsafe fn call<R>(&mut self, arguments: &[middle::Arg]) -> R {
+    unsafe fn call<R>(&self, arguments: &[middle::Arg]) -> R {
         self.cif.call(self.fn_ptr, arguments)
     }
 }
@@ -105,8 +105,8 @@ impl FnTable {
         Ok(())
     }
 
-    pub unsafe fn call_fn<R>(&mut self, function: String, arguments: &[middle::Arg]) -> error::Result<R> {
-        let foreign_fn = self.0.get_mut(&function).ok_or(error::Error::FunctionNotDefined(function))?;
+    pub unsafe fn call_fn<R>(&self, function: String, arguments: &[middle::Arg]) -> error::Result<R> {
+        let foreign_fn = self.0.get(&function).ok_or(error::Error::FunctionNotDefined(function))?;
 
         Ok(foreign_fn.call(arguments))
     }
@@ -173,12 +173,10 @@ mod tests {
                 assert_eq!(false, ptr.is_null());
                 assert_eq!(0u64, *ptr, "Newly allocated memory is not 0, as guaranteed by VirtualAlloc.");
 
-                println!("2");
                 *ptr = 9u64;
 
                 assert_eq!(9u64, *ptr, "Unable to write and/or read pointer from VirtualAlloc.");
 
-                println!("4");
                 let return_value: i32 = fn_table.call_fn(String::from("VirtualFree"), vec![middle::arg(&ptr), middle::arg(&0u64), middle::arg(&0x00008000u32)].as_slice()).unwrap();
 
                 assert_ne!(0i32, return_value, "VirtualFree returned 0, indicating an error in freeing the memory.");

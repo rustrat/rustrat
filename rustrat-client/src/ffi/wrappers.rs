@@ -1,17 +1,33 @@
 use std::ffi::{CStr, c_void};
+use std::cell::RefCell;
 use libffi::middle;
 
 use super::{FfiType, FnTable};
 
+// TODO remove, should possibly not use this for the hashmap
+static mut GLOBAL_FN_TABLE: Option<RefCell<FnTable>> = None;
+
+pub fn setup_fn_table() {
+    unsafe {
+        GLOBAL_FN_TABLE = match GLOBAL_FN_TABLE {
+            Some(_) => Some(RefCell::new(FnTable::new())),
+            None => Some(RefCell::new(FnTable::new())),
+        };
+    };
+}
+
+// TODO write this in a less haphazard manner
 pub unsafe extern "C" fn has_fn_wrapper(
     _rt: ::wasm3::wasm3_sys::IM3Runtime,
     _sp: ::wasm3::wasm3_sys::m3stack_t,
-    mem: *mut u8,
+    mem: *mut c_void,
 ) -> *const core::ffi::c_void {
     use ::wasm3::WasmType as _;
 
-    let fn_table = FnTable::new();
+    let fn_table = GLOBAL_FN_TABLE.as_ref().unwrap().borrow();
     let return_sp = _sp;
+    let mem = mem as *mut u8;
+
     // Pop string pointer from the stack and calculate pointer to raw data.
     // wasm (or rather wasm32) pointers are 32 bits.
     let fn_str_ptr = mem.offset(i32::pop_from_stack(_sp) as isize) as *const i8;
@@ -37,12 +53,13 @@ pub unsafe extern "C" fn has_fn_wrapper(
 pub unsafe extern "C" fn register_fn_wrapper(
     _rt: ::wasm3::wasm3_sys::IM3Runtime,
     _sp: ::wasm3::wasm3_sys::m3stack_t,
-    mem: *mut u8,
+    mem: *mut c_void,
 ) -> *const core::ffi::c_void {
     use ::wasm3::WasmType as _;
 
-    let mut fn_table = FnTable::new();
+    let mut fn_table = GLOBAL_FN_TABLE.as_ref().unwrap().borrow_mut();
     let return_sp = _sp;
+    let mem = mem as *mut u8;
 
     let fn_str_ptr = mem.offset(i32::pop_from_stack(_sp) as isize) as *const i8;
     let _sp = _sp.add(i32::SIZE_IN_SLOT_COUNT);
@@ -90,16 +107,17 @@ pub unsafe extern "C" fn register_fn_wrapper(
 pub unsafe extern "C" fn call_fn_wrapper(
     _rt: ::wasm3::wasm3_sys::IM3Runtime,
     _sp: ::wasm3::wasm3_sys::m3stack_t,
-    mem: *mut u8,
+    mem: *mut c_void,
 ) -> *const core::ffi::c_void {
     use ::wasm3::WasmType as _;
 
-    let mut fn_table = FnTable::new();
+    let fn_table = GLOBAL_FN_TABLE.as_ref().unwrap().borrow();
     let return_sp = _sp;
+    let mem = mem as *mut u8;
 
     let fn_str_ptr = mem.offset(i32::pop_from_stack(_sp) as isize) as *const i8;
     let _sp = _sp.add(i32::SIZE_IN_SLOT_COUNT);
-    let args_ptr = mem.offset(i32::pop_from_stack(_sp) as isize) as *mut c_void;
+    let args_ptr = mem.offset(i32::pop_from_stack(_sp) as isize) as *mut i32;
     let _sp = _sp.add(i32::SIZE_IN_SLOT_COUNT);
 
     let fn_str = match CStr::from_ptr(fn_str_ptr).to_str() {
@@ -110,7 +128,7 @@ pub unsafe extern "C" fn call_fn_wrapper(
         }
     };
 
-    let foreign_fn = match fn_table.0.get_mut(&String::from(fn_str)) {
+    let foreign_fn = match fn_table.0.get(&String::from(fn_str)) {
         Some(function) => function,
         None => {
             i32::push_on_stack(0, return_sp);
@@ -120,10 +138,24 @@ pub unsafe extern "C" fn call_fn_wrapper(
     let mut args: Vec<middle::Arg> = Vec::new();
 
     for i in 0..foreign_fn.n_args as isize {
-        let arg: *mut c_void = args_ptr.offset(i) ;
+        let arg_ptrptr = *(args_ptr.offset(i) as *mut u32) as isize;
+        let arg: *mut c_void = mem.offset(arg_ptrptr) as *mut c_void;
+
         args.push(match foreign_fn.arg_types[i as usize] {
+            // TODO write test for working with pointers (to WebAssembly memory)
             FfiType::POINTER => middle::arg(&(mem.offset(*(arg as *const i32) as isize) as *mut c_void)),
-            _ => middle::arg(&arg),
+            FfiType::DOUBLE => middle::arg(&(*(arg as *mut f64))),
+            FfiType::FLOAT => middle::arg(&(*(arg as *mut f32))),
+            FfiType::LONGDOUBLE => middle::arg(&(*(arg as *mut f64))),
+            FfiType::SINT16 => middle::arg(&(*(arg as *mut i16))),
+            FfiType::SINT32 => middle::arg(&(*(arg as *mut i32))),
+            FfiType::SINT64 => middle::arg(&(*(arg as *mut i64))),
+            FfiType::SINT8 => middle::arg(&(*(arg as *mut i8))),
+            FfiType::UINT16 => middle::arg(&(*(arg as *mut u16))),
+            FfiType::UINT32 => middle::arg(&(*(arg as *mut u32))),
+            FfiType::UINT64 => middle::arg(&(*(arg as *mut u64))),
+            FfiType::UINT8 => middle::arg(&(*(arg as *mut u8))),
+            FfiType::VOID => middle::arg(&0), // TODO what to do here? Panic?
         });
     }
 
