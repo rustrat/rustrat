@@ -1,5 +1,5 @@
 use wasm3::error::Result;
-use wasm3::{Environment, Runtime, Module};
+use wasm3::{Environment, Module, Runtime};
 
 pub struct WasmEnvironment {
     env: Environment,
@@ -11,7 +11,7 @@ impl WasmEnvironment {
         let env = Environment::new()?;
         let runtime = env.create_runtime(stack_size)?;
 
-        Ok(WasmEnvironment {env, runtime})
+        Ok(WasmEnvironment { env, runtime })
     }
 
     pub fn load_module(&self, bytes: &[u8]) -> Result<Module> {

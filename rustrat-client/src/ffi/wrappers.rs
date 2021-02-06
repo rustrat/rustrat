@@ -1,6 +1,6 @@
-use std::ffi::{CStr, c_void};
-use std::cell::RefCell;
 use libffi::middle;
+use std::cell::RefCell;
+use std::ffi::{c_void, CStr};
 
 use super::{FfiType, FnTable};
 
@@ -34,11 +34,11 @@ pub unsafe extern "C" fn has_fn_wrapper(
     let _sp = _sp.add(i32::SIZE_IN_SLOT_COUNT);
 
     let fn_str = match CStr::from_ptr(fn_str_ptr).to_str() {
-        Ok(string) => {string},
+        Ok(string) => string,
         Err(_) => {
             i32::push_on_stack(0, return_sp);
             return ::wasm3::wasm3_sys::m3Err_none as _;
-        },
+        }
     };
 
     if fn_table.has_fn(String::from(fn_str)) {
@@ -73,7 +73,7 @@ pub unsafe extern "C" fn register_fn_wrapper(
     let _sp = _sp.add(i32::SIZE_IN_SLOT_COUNT);
 
     let fn_str = match CStr::from_ptr(fn_str_ptr).to_str() {
-        Ok(string) => {string}
+        Ok(string) => string,
         Err(_) => {
             i32::push_on_stack(0, return_sp);
             return ::wasm3::wasm3_sys::m3Err_none as _;
@@ -81,7 +81,7 @@ pub unsafe extern "C" fn register_fn_wrapper(
     };
 
     let library_str = match CStr::from_ptr(library_str_ptr).to_str() {
-        Ok(string) => {string}
+        Ok(string) => string,
         Err(_) => {
             i32::push_on_stack(0, return_sp);
             return ::wasm3::wasm3_sys::m3Err_none as _;
@@ -94,11 +94,16 @@ pub unsafe extern "C" fn register_fn_wrapper(
     }
 
     i32::push_on_stack(
-        match fn_table.register_fn(String::from(fn_str), String::from(library_str), return_type_int, arg_type_ints.as_slice()) {
+        match fn_table.register_fn(
+            String::from(fn_str),
+            String::from(library_str),
+            return_type_int,
+            arg_type_ints.as_slice(),
+        ) {
             Ok(_) => 1,
             Err(_) => 0,
         },
-        return_sp
+        return_sp,
     );
 
     ::wasm3::wasm3_sys::m3Err_none as _
@@ -121,7 +126,7 @@ pub unsafe extern "C" fn call_fn_wrapper(
     let _sp = _sp.add(i32::SIZE_IN_SLOT_COUNT);
 
     let fn_str = match CStr::from_ptr(fn_str_ptr).to_str() {
-        Ok(string) => {string}
+        Ok(string) => string,
         Err(_) => {
             i32::push_on_stack(0, return_sp);
             return ::wasm3::wasm3_sys::m3Err_none as _;
@@ -133,7 +138,7 @@ pub unsafe extern "C" fn call_fn_wrapper(
         None => {
             i32::push_on_stack(0, return_sp);
             return ::wasm3::wasm3_sys::m3Err_none as _;
-        },
+        }
     };
     let mut args: Vec<middle::Arg> = Vec::new();
 
@@ -143,7 +148,9 @@ pub unsafe extern "C" fn call_fn_wrapper(
 
         args.push(match foreign_fn.arg_types[i as usize] {
             // TODO write test for working with pointers (to WebAssembly memory)
-            FfiType::POINTER => middle::arg(&(mem.offset(*(arg as *const i32) as isize) as *mut c_void)),
+            FfiType::POINTER => {
+                middle::arg(&(mem.offset(*(arg as *const i32) as isize) as *mut c_void))
+            }
             FfiType::DOUBLE => middle::arg(&(*(arg as *mut f64))),
             FfiType::FLOAT => middle::arg(&(*(arg as *mut f32))),
             FfiType::LONGDOUBLE => middle::arg(&(*(arg as *mut f64))),
@@ -163,59 +170,59 @@ pub unsafe extern "C" fn call_fn_wrapper(
         FfiType::DOUBLE => {
             let return_value: f64 = foreign_fn.call(args.as_slice());
             f64::push_on_stack(return_value, return_sp);
-        },
+        }
         FfiType::FLOAT => {
             let return_value: f32 = foreign_fn.call(args.as_slice());
             f32::push_on_stack(return_value, return_sp);
-        },
+        }
         FfiType::LONGDOUBLE => {
             // Could  possibly be something more than 64 bits? (80 bits)
             let return_value: f64 = foreign_fn.call(args.as_slice());
             f64::push_on_stack(return_value, return_sp);
-        },
+        }
         FfiType::POINTER => {
             let return_value: u64 = foreign_fn.call(args.as_slice());
             u64::push_on_stack(return_value, return_sp);
-        },
+        }
         FfiType::SINT16 => {
             // wasm3-rs support to push things smaller than 32 bits? Is it even possible?
             let return_value: i16 = foreign_fn.call(args.as_slice());
             i32::push_on_stack(return_value as i32, return_sp);
-        },
+        }
         FfiType::SINT32 => {
             let return_value: i32 = foreign_fn.call(args.as_slice());
             i32::push_on_stack(return_value, return_sp);
-        },
+        }
         FfiType::SINT64 => {
             let return_value: i64 = foreign_fn.call(args.as_slice());
             i64::push_on_stack(return_value, return_sp);
-        },
+        }
         FfiType::SINT8 => {
             let return_value: i8 = foreign_fn.call(args.as_slice());
             i32::push_on_stack(return_value as i32, return_sp);
-        },
+        }
         FfiType::UINT16 => {
             let return_value: u16 = foreign_fn.call(args.as_slice());
             u32::push_on_stack(return_value as u32, return_sp);
-        },
+        }
         FfiType::UINT32 => {
             let return_value: u32 = foreign_fn.call(args.as_slice());
             u32::push_on_stack(return_value, return_sp);
-        },
+        }
         FfiType::UINT64 => {
             let return_value: u64 = foreign_fn.call(args.as_slice());
             u64::push_on_stack(return_value, return_sp);
-        },
+        }
         FfiType::UINT8 => {
             let return_value: u8 = foreign_fn.call(args.as_slice());
             u32::push_on_stack(return_value as u32, return_sp);
-        },
+        }
         FfiType::VOID => {
             // Void, lets try to read a 32 bit int and hope nothing bad happens...
             // Pushing 0 on the WebAssembly stack to keep it happy
             let _: i32 = foreign_fn.call(args.as_slice());
             i32::push_on_stack(0, return_sp);
-        },
+        }
     };
 
     ::wasm3::wasm3_sys::m3Err_none as _

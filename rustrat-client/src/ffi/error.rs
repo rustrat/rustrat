@@ -1,6 +1,6 @@
+use libffi::low;
 use std::ffi::NulError;
 use std::fmt;
-use libffi::low;
 
 #[derive(Debug)]
 pub enum Error {
@@ -8,7 +8,7 @@ pub enum Error {
     LibFfiError(low::Error),
     CStringError(NulError),
     LibraryNotFound(String),
-    FunctionNotFound{function: String, library: String},
+    FunctionNotFound { function: String, library: String },
     FunctionNotDefined(String),
 }
 
@@ -17,10 +17,18 @@ impl fmt::Display for Error {
         match self {
             Error::InvalidType(number) => write!(f, "Invalid type enum int: {}", number),
             Error::LibFfiError(e) => write!(f, "Error from libffi: {:?}", e),
-            Error::CStringError(e) => write!(f, "Error when converting string to c string: {:?}", e),
+            Error::CStringError(e) => {
+                write!(f, "Error when converting string to c string: {:?}", e)
+            }
             Error::LibraryNotFound(library) => write!(f, "Could not load library {}", library),
-            Error::FunctionNotFound {function, library} => write!(f, "Could not find function {} in library {}", function, library),
-            Error::FunctionNotDefined(function) => write!(f, "Function {} not defined in function table", function),
+            Error::FunctionNotFound { function, library } => write!(
+                f,
+                "Could not find function {} in library {}",
+                function, library
+            ),
+            Error::FunctionNotDefined(function) => {
+                write!(f, "Function {} not defined in function table", function)
+            }
         }
     }
 }

@@ -1,21 +1,21 @@
 use libffi::middle;
-use num_derive::FromPrimitive;    
+use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
-use std::ffi::CString;
-use std::os::raw::{c_void,c_char};
 use std::collections::HashMap;
+use std::ffi::CString;
+use std::os::raw::{c_char, c_void};
 
 pub mod error;
 pub mod wrappers;
 
-#[link(name="Kernel32")]
+#[link(name = "Kernel32")]
 extern "C" {
     fn GetModuleHandleA(libraryName: *const c_char) -> *mut c_void;
     fn LoadLibraryA(libraryName: *const c_char) -> *mut c_void;
     fn GetProcAddress(handle: *mut c_void, fn_name: *mut c_char) -> *mut c_void;
 }
 
-#[derive(FromPrimitive,Copy,Clone)]
+#[derive(FromPrimitive, Copy, Clone)]
 pub enum FfiType {
     DOUBLE = 3,
     FLOAT = 2,
@@ -68,7 +68,7 @@ impl ForeignFn {
     }
 }
 
-pub struct FnTable (HashMap<String, ForeignFn>,);
+pub struct FnTable(HashMap<String, ForeignFn>);
 
 impl FnTable {
     pub fn new() -> Self {
@@ -76,15 +76,22 @@ impl FnTable {
     }
 
     pub fn has_fn(&self, function: String) -> bool {
-       self.0.contains_key(&function) 
+        self.0.contains_key(&function)
     }
 
-    pub fn register_fn(&mut self, function: String, library: String, return_type_int: i32, arg_type_ints: &[i32]) -> error::Result<()> {
+    pub fn register_fn(
+        &mut self,
+        function: String,
+        library: String,
+        return_type_int: i32,
+        arg_type_ints: &[i32],
+    ) -> error::Result<()> {
         if self.has_fn(function.clone()) {
             return Ok(());
         }
 
-        let return_type = FfiType::from_i32(return_type_int).ok_or(error::Error::InvalidType(return_type_int))?;
+        let return_type =
+            FfiType::from_i32(return_type_int).ok_or(error::Error::InvalidType(return_type_int))?;
         let libffi_return_type = return_type.to_libffi_type();
 
         let mut arg_types: Vec<FfiType> = Vec::new();
@@ -100,13 +107,29 @@ impl FnTable {
 
         let fn_ptr = get_fn_ptr(function.as_str(), library.as_str())?;
 
-        self.0.insert(function, ForeignFn{cif: cif, fn_ptr: middle::CodePtr(fn_ptr), n_args: arg_types.len(), return_type: return_type, arg_types: arg_types});
+        self.0.insert(
+            function,
+            ForeignFn {
+                cif: cif,
+                fn_ptr: middle::CodePtr(fn_ptr),
+                n_args: arg_types.len(),
+                return_type: return_type,
+                arg_types: arg_types,
+            },
+        );
 
         Ok(())
     }
 
-    pub unsafe fn call_fn<R>(&self, function: String, arguments: &[middle::Arg]) -> error::Result<R> {
-        let foreign_fn = self.0.get(&function).ok_or(error::Error::FunctionNotDefined(function))?;
+    pub unsafe fn call_fn<R>(
+        &self,
+        function: String,
+        arguments: &[middle::Arg],
+    ) -> error::Result<R> {
+        let foreign_fn = self
+            .0
+            .get(&function)
+            .ok_or(error::Error::FunctionNotDefined(function))?;
 
         Ok(foreign_fn.call(arguments))
     }
@@ -137,12 +160,15 @@ fn get_fn_ptr(fn_name: &str, library_name: &str) -> error::Result<*mut c_void> {
 
     let library_handle = get_or_load_module(library_name)?;
 
-    let fn_ptr = unsafe {GetProcAddress(library_handle, fn_name_arg)};
+    let fn_ptr = unsafe { GetProcAddress(library_handle, fn_name_arg) };
 
-    unsafe {CString::from_raw(fn_name_arg)};
-    
+    unsafe { CString::from_raw(fn_name_arg) };
+
     if fn_ptr.is_null() {
-        return Err(error::Error::FunctionNotFound {function: fn_name.to_string(), library: library_name.to_string()});
+        return Err(error::Error::FunctionNotFound {
+            function: fn_name.to_string(),
+            library: library_name.to_string(),
+        });
     } else {
         return Ok(fn_ptr);
     }
@@ -150,8 +176,8 @@ fn get_fn_ptr(fn_name: &str, library_name: &str) -> error::Result<*mut c_void> {
 
 #[cfg(test)]
 mod tests {
-    use std::ptr;
     use super::*;
+    use std::ptr;
 
     #[test]
     fn call_virtualalloc_virtualfree() {
@@ -161,25 +187,78 @@ mod tests {
         for _ in 0..100 {
             let mut fn_table = FnTable::new();
 
-            let args = [FfiType::POINTER as i32, FfiType::UINT64 as i32, FfiType::UINT32 as i32, FfiType::UINT32 as i32];
-            let free_args = [FfiType::POINTER as i32, FfiType::UINT64 as i32, FfiType::UINT32 as i32];
+            let args = [
+                FfiType::POINTER as i32,
+                FfiType::UINT64 as i32,
+                FfiType::UINT32 as i32,
+                FfiType::UINT32 as i32,
+            ];
+            let free_args = [
+                FfiType::POINTER as i32,
+                FfiType::UINT64 as i32,
+                FfiType::UINT32 as i32,
+            ];
 
-            fn_table.register_fn(String::from("VirtualAlloc"), String::from("kernel32.dll"), FfiType::POINTER as i32, &args).unwrap();
-            fn_table.register_fn(String::from("VirtualFree"), String::from("kernel32.dll"), FfiType::POINTER as i32, &free_args).unwrap();
+            fn_table
+                .register_fn(
+                    String::from("VirtualAlloc"),
+                    String::from("kernel32.dll"),
+                    FfiType::POINTER as i32,
+                    &args,
+                )
+                .unwrap();
+            fn_table
+                .register_fn(
+                    String::from("VirtualFree"),
+                    String::from("kernel32.dll"),
+                    FfiType::POINTER as i32,
+                    &free_args,
+                )
+                .unwrap();
 
             unsafe {
-                let ptr: *mut u64 = fn_table.call_fn(String::from("VirtualAlloc"), vec![middle::arg(&ptr::null::<c_void>()), middle::arg(&8u64), middle::arg(&(0x00001000u32 | 0x00002000u32)), middle::arg(&0x04u32)].as_slice()).unwrap();
+                let ptr: *mut u64 = fn_table
+                    .call_fn(
+                        String::from("VirtualAlloc"),
+                        vec![
+                            middle::arg(&ptr::null::<c_void>()),
+                            middle::arg(&8u64),
+                            middle::arg(&(0x00001000u32 | 0x00002000u32)),
+                            middle::arg(&0x04u32),
+                        ]
+                        .as_slice(),
+                    )
+                    .unwrap();
 
                 assert_eq!(false, ptr.is_null());
-                assert_eq!(0u64, *ptr, "Newly allocated memory is not 0, as guaranteed by VirtualAlloc.");
+                assert_eq!(
+                    0u64, *ptr,
+                    "Newly allocated memory is not 0, as guaranteed by VirtualAlloc."
+                );
 
                 *ptr = 9u64;
 
-                assert_eq!(9u64, *ptr, "Unable to write and/or read pointer from VirtualAlloc.");
+                assert_eq!(
+                    9u64, *ptr,
+                    "Unable to write and/or read pointer from VirtualAlloc."
+                );
 
-                let return_value: i32 = fn_table.call_fn(String::from("VirtualFree"), vec![middle::arg(&ptr), middle::arg(&0u64), middle::arg(&0x00008000u32)].as_slice()).unwrap();
+                let return_value: i32 = fn_table
+                    .call_fn(
+                        String::from("VirtualFree"),
+                        vec![
+                            middle::arg(&ptr),
+                            middle::arg(&0u64),
+                            middle::arg(&0x00008000u32),
+                        ]
+                        .as_slice(),
+                    )
+                    .unwrap();
 
-                assert_ne!(0i32, return_value, "VirtualFree returned 0, indicating an error in freeing the memory.");
+                assert_ne!(
+                    0i32, return_value,
+                    "VirtualFree returned 0, indicating an error in freeing the memory."
+                );
             };
         }
     }
