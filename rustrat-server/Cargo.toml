@@ -1,0 +1,15 @@
+[package]
+name = "rustrat-server"
+version = "0.1.0"
+authors = ["Emil Taylor Bye <phptph@gmail.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]
+rustrat-common = { version = "0.1", path = "../rustrat-common" }
+tokio = { version = "1.2", features = ["full", "test-util"] }
+sqlx = { version = "0.5.1", features = ["runtime-tokio-rustls", "sqlite", "macros", "chrono"]}
+chrono = "0.4"
+rand = "0.8.0"

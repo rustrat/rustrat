@@ -12,6 +12,8 @@ pub mod wasm;
 
 extern crate num_derive;
 
+// TODO get random values without getrandom (seed)
+
 // TODO make more robust, attempt to parse arguments somewhat
 #[no_mangle]
 pub unsafe extern "C" fn rundll_run(

@@ -1,4 +1,7 @@
 [workspace]
 members = [
     "rustrat-client",
+    "rustrat-server",
+    "rustrat-common",
+    "helpers/update-dbtemplate"
 ]

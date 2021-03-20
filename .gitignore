@@ -1,3 +1,6 @@
+*.db
+*-shm
+*-wal
 .vscode/
 **/*.rs.bk
 debug/
