@@ -1,0 +1,91 @@
+{
+  "db": "SQLite",
+  "299e95bac3d3f9a38aa2f5e3538a67bc450432be3ea2af8fef89fbd58b236c25": {
+    "query": "SELECT COUNT(jobs.job_id) as tasks FROM jobs, rats WHERE rats.public_key = ? AND rats.rat_id = jobs.rat_id AND started = false",
+    "describe": {
+      "columns": [
+        {
+          "name": "tasks",
+          "ordinal": 0,
+          "type_info": "Int"
+        }
+      ],
+      "parameters": {
+        "Right": 1
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
+  "a7600d4b5070103d408361399c18e6e5d964f5b99be9b0933f4bf316326bf5f7": {
+    "query": "UPDATE rats SET last_callback = datetime('now'), alive = false WHERE public_key = ?",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Right": 1
+      },
+      "nullable": []
+    }
+  },
+  "ad430097cb64145909625547b7803e5d9cef75a12e9205007baabca04623d714": {
+    "query": "SELECT jobs.job_id, jobs.job_type, jobs.payload\n                            FROM jobs, rats\n                            WHERE rats.public_key = ?\n                                AND rats.rat_id = jobs.rat_id\n                                AND jobs.started = false\n                            ORDER BY job_id ASC\n                            LIMIT 1",
+    "describe": {
+      "columns": [
+        {
+          "name": "job_id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        },
+        {
+          "name": "job_type",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "payload",
+          "ordinal": 2,
+          "type_info": "Blob"
+        }
+      ],
+      "parameters": {
+        "Right": 1
+      },
+      "nullable": [
+        false,
+        false,
+        false
+      ]
+    }
+  },
+  "b6eea4e4331dbc7aa0a502b2740f55c7bcaaede78f9ec6da747ff87fa044b4fe": {
+    "query": "INSERT INTO rats (public_key, first_seen, last_callback, alive) VALUES (?, datetime('now'), datetime('now'), true)",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Right": 1
+      },
+      "nullable": []
+    }
+  },
+  "e46c93552ac587aa04a6c166d036ad10b68627e9110de97c819867829a55e0ea": {
+    "query": "UPDATE jobs SET started = true, last_update = datetime('now') WHERE job_id = ?",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Right": 1
+      },
+      "nullable": []
+    }
+  },
+  "fe018ff8adfc6be194329615785f1d0948681a087fb361e084cbb0b7fadfec8d": {
+    "query": "UPDATE rats SET last_callback = datetime('now') WHERE public_key = ?",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Right": 1
+      },
+      "nullable": []
+    }
+  }
+}

@@ -9,14 +9,16 @@ pub struct Pool {
     pub reader: sqlx::Pool<Sqlite>,
 }
 
-pub async fn prepare_database_pool<P: AsRef<Path>>(database_location: P) -> Result<Pool, sqlx::Error> {
+pub async fn prepare_database_pool<P: AsRef<Path>>(
+    database_location: P,
+) -> Result<Pool, sqlx::Error> {
     let writer_options = SqliteConnectOptions::new()
         .filename(database_location)
         .create_if_missing(true)
         .foreign_keys(true)
         .journal_mode(SqliteJournalMode::Wal)
         .synchronous(SqliteSynchronous::Normal);
-    
+
     let reader_options = writer_options.clone().read_only(true);
 
     let writer_pool = SqlitePoolOptions::new()
@@ -28,7 +30,10 @@ pub async fn prepare_database_pool<P: AsRef<Path>>(database_location: P) -> Resu
         .connect_with(reader_options)
         .await?;
 
-    let pool = Pool {writer: writer_pool, reader: reader_pool};
+    let pool = Pool {
+        writer: writer_pool,
+        reader: reader_pool,
+    };
 
     initialize_tables(&pool).await?;
 

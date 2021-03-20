@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
 use crate::encryption::*;
 use crate::error::*;
 use crate::messages::{deserialize, serialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct CheckIn(PublicKey);
@@ -35,11 +35,16 @@ impl EncryptedMessage {
 }
 
 impl Request {
-    pub fn to_encrypted_message<CR: rand::Rng + rand::CryptoRng>(&self, public_key: PublicKey, shared_key: SharedKey, rng: &mut CR) -> Result<EncryptedMessage> {
+    pub fn to_encrypted_message<CR: rand::Rng + rand::CryptoRng>(
+        &self,
+        public_key: PublicKey,
+        shared_key: SharedKey,
+        rng: &mut CR,
+    ) -> Result<EncryptedMessage> {
         let serialized_object = serialize(&self)?;
         let ciphertext = Encrypted::from_byte_array(shared_key, serialized_object, rng)?;
 
-        Ok(EncryptedMessage { 
+        Ok(EncryptedMessage {
             public_key: public_key,
             data: ciphertext,
         })

@@ -35,7 +35,7 @@ impl TryFrom<&str> for JobType {
     fn try_from(s: &str) -> Result<Self, Self::Error> {
         let s = s.to_ascii_lowercase();
         if s == "task" {
-           return Ok(JobType::Task);
+            return Ok(JobType::Task);
         } else if s == "exit" {
             return Ok(JobType::Exit);
         } else {

@@ -11,11 +11,11 @@ struct Arguments {
 }
 
 fn main() -> rustrat_client::error::Result<()> {
-    //let opt = Arguments::from_args();
-    let opt = Arguments {
+    let opt = Arguments::from_args();
+    /*let opt = Arguments {
         path: String::from("payloads\\target\\wasm32-unknown-unknown\\debug\\demo_messagebox.wasm"),
         fn_name: String::from("go"),
-    };
+    };*/
 
     let result = rustrat_client::run_webassembly(&opt.path, &opt.fn_name)?;
 

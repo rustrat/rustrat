@@ -1,5 +1,5 @@
-use chacha20poly1305::aead::Error as AeadError;
 use bincode::Error as BincodeError;
+use chacha20poly1305::aead::Error as AeadError;
 
 pub enum Error {
     EncryptionError(AeadError),

@@ -1,6 +1,6 @@
 use crate::error::*;
-use chacha20poly1305::{XChaCha20Poly1305, Key, XNonce};
 use chacha20poly1305::aead::{Aead, NewAead};
+use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
 use serde::{Deserialize, Serialize};
 
 // Rustrat uses 256 bit keys for de/encryption
@@ -29,11 +29,15 @@ impl Encrypted {
         let nonce = XNonce::from_slice(&self.nonce);
 
         let plaintext = cipher.decrypt(nonce, self.ciphertext.as_ref())?;
-        
+
         Ok(plaintext)
     }
 
-    pub fn from_byte_array<T: AsRef<[u8]>, CR: rand::Rng + rand::CryptoRng>(shared_key: SharedKey, data: T, rng: &mut CR) -> Result<Encrypted> {
+    pub fn from_byte_array<T: AsRef<[u8]>, CR: rand::Rng + rand::CryptoRng>(
+        shared_key: SharedKey,
+        data: T,
+        rng: &mut CR,
+    ) -> Result<Encrypted> {
         let mut raw_nonce = [0u8; 24];
         rng.fill(&mut raw_nonce);
 
@@ -43,9 +47,9 @@ impl Encrypted {
 
         let ciphertext = cipher.encrypt(nonce, data.as_ref())?;
 
-        Ok(Encrypted { 
-           nonce: raw_nonce,
-           ciphertext: ciphertext, 
+        Ok(Encrypted {
+            nonce: raw_nonce,
+            ciphertext: ciphertext,
         })
     }
 }
