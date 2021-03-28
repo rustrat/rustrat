@@ -18,6 +18,24 @@
       ]
     }
   },
+  "48e44ffc17d87e2d9a8535f0b458f5dd0ad1fce5c1eb08b6b1f298a0f997b97a": {
+    "query": "SELECT public_key FROM rats WHERE alive = true",
+    "describe": {
+      "columns": [
+        {
+          "name": "public_key",
+          "ordinal": 0,
+          "type_info": "Blob"
+        }
+      ],
+      "parameters": {
+        "Right": 0
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
   "a7600d4b5070103d408361399c18e6e5d964f5b99be9b0933f4bf316326bf5f7": {
     "query": "UPDATE rats SET last_callback = datetime('now'), alive = false WHERE public_key = ?",
     "describe": {

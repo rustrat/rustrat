@@ -1,6 +1,8 @@
 pub mod messages;
 
-use std::{collections::HashMap, convert::TryFrom};
+use std::collections::HashMap;
+use std::convert::{TryFrom, TryInto};
+use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::task::spawn_blocking;
 
 use rustrat_common::encryption;
@@ -15,15 +17,66 @@ use crate::persistence::tables;
 // TODO utilize more concurrency friendly data structures?
 // TODO remove pub and create constructor function?
 pub struct CoreTask {
-    pub shared_keys: HashMap<encryption::PublicKey, encryption::SharedKey>,
-    pub private_key: encryption::PrivateKey,
+    shared_keys: HashMap<encryption::PublicKey, encryption::SharedKey>,
+    private_key: encryption::PrivateKey,
     pub db_pool: crate::persistence::Pool,
+    rx: Receiver<Job>,
+    pub tx: Sender<Job>,
 }
 
 impl CoreTask {
+    pub async fn new(
+        private_key: encryption::PrivateKey,
+        db_pool: crate::persistence::Pool,
+    ) -> Self {
+        let public_keys = sqlx::query!("SELECT public_key FROM rats WHERE alive = true")
+            .fetch_all(&db_pool.reader)
+            .await
+            .unwrap();
+
+        let shared_keys = spawn_blocking(move || {
+            let mut shared_keys: HashMap<encryption::PublicKey, encryption::SharedKey> =
+                HashMap::new();
+
+            for public_key_vec in public_keys {
+                match public_key_vec.public_key.try_into() {
+                    Ok(public_key) => {
+                        let shared_key = encryption::get_shared_key(private_key, public_key);
+                        shared_keys.insert(public_key, shared_key);
+                    }
+                    Err(_) => {
+                        // TODO do something here or just silently ignore?
+                    }
+                };
+            }
+
+            shared_keys
+        })
+        .await
+        .unwrap();
+
+        // TODO sane default for buffer size?
+        let (tx, rx) = channel::<Job>(32);
+
+        CoreTask {
+            shared_keys: shared_keys,
+            private_key: private_key,
+            db_pool: db_pool,
+            rx: rx,
+            tx: tx,
+        }
+    }
+
+    pub async fn run(&mut self) {
+        while let Some(job) = self.rx.recv().await {
+            self.process_job(job).await;
+        }
+    }
+
     pub async fn process_job(&mut self, job: Job) {
         match *job.message {
-            Task::RatToServer(msg) => self.process_rat_task(&msg, job.reply_channel).await,
+            // TODO spawn a new task here instead?
+            Task::RatToServer(msg) => self.process_rat_task(&msg, job.tx).await,
         }
     }
 

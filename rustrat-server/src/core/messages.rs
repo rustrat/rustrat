@@ -8,7 +8,7 @@ pub type ReplyChannel = oneshot::Sender<Result<Box<Reply>>>;
 
 pub struct Job {
     pub message: Box<Task>,
-    pub reply_channel: ReplyChannel,
+    pub tx: ReplyChannel,
 }
 
 pub enum Task {
