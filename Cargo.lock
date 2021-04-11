@@ -1251,6 +1251,7 @@ dependencies = [
  "chrono",
  "rand 0.8.3",
  "rustrat-common",
+ "serde",
  "sqlx",
  "tokio",
  "warp",
