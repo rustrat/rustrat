@@ -16,6 +16,6 @@ If the database schema is changed, a new example database needs to be created. F
 
 ## Usage
 * `rustrat-client-exe.exe path\to\webassembly.wasm function_name`
-* `runddl32 rustrat_client.dll,rundll_run path\to\webassembly.wasm function_name`
+* `rundll32 rustrat_client.dll,rundll_run path\to\webassembly.wasm function_name`
 
 Note that the functionality to execute compiled WebAssembly will be moved to a separate crate for development/debugging purposes.
