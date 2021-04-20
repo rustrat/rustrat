@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "rustrat-client",
+    "rustrat-prng-seed",
     "rustrat-server",
     "rustrat-common",
     "helpers/update-dbtemplate"

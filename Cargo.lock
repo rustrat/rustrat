@@ -1244,6 +1244,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustrat-prng-seed"
+version = "0.1.0"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "rustrat-server"
 version = "0.1.0"
 dependencies = [
