@@ -161,7 +161,7 @@ impl CoreTask {
                             job_id: i64,
                             job_type: String,
                             payload: Vec<u8>,
-                        };
+                        }
 
                         // We want to fetch a new task and set started to true if there is a task, so we use a transaction to avoid sending the same task twice.
                         // TODO Replace with RETURNING when sqlx has support for it (https://github.com/launchbadge/sqlx/issues/1115)
