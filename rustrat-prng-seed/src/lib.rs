@@ -1,7 +1,7 @@
+use blake2::{Blake2s, Digest};
+
 // rdrand_fn needs an array of 16 bytes and will fill the array with random data from rdrand. A return value of 0 means that rdrand could not provide random values. Note that some values may have changed in the array.
-
 // rdtsc_fn needs an array of 8 bytes which will be filled with the result from rdts, which returns a 64 bit number. On x86_64 the result is returned as well, while on x86, the return value will be the 32 least significat bits (I think).
-
 // copy_tib copies part of the TIB to the buffer. To be safe, supply an array of at least 110 bytes, as that is what will be copied on x86_64. x86 will get less data from the tib, but a 110 byte buffer should be used to keep things simple.
 
 #[cfg(target_arch = "x86")]
@@ -18,18 +18,37 @@ extern "C" {
     fn copy_tib(output_buffer: *mut u8) -> u64;
 }
 
-// TODO call all functions, place in buffer, hash, create seed
+pub fn get_rand_seed() -> [u8; 32] {
+    // The different functions expects 16, 8, and 110 bytes, so we need a buffer of at least (16+8+110=)134 bytes.
+    let mut out_buf = [0u8; 124];
 
-// TODO some test to make sure at least some sort of entropy is collected?
+    let (rdrand, remainder) = out_buf.split_at_mut(16);
+    let (rdtsc, tib) = remainder.split_at_mut(8);
+
+    unsafe {
+        rdrand_fn(rdrand.as_mut_ptr());
+        rdtsc_fn(rdtsc.as_mut_ptr());
+        copy_tib(tib.as_mut_ptr());
+    }
+
+    // TODO possibly use something other than Blake2? Used for simplicity and because I believe at least Blake2 will not be a weak point when it comes to security (the "entropy" if rdrand is missing is a larger problem)
+    let mut hasher = Blake2s::new();
+    hasher.update(out_buf);
+    hasher.finalize().into()
+}
+
 #[cfg(test)]
 mod tests {
     use std::convert::TryInto;
     use std::process::id;
 
+    use rand::rngs::StdRng;
+    use rand::{RngCore, SeedableRng};
+
     #[test]
     fn rdrand() {
         // Provide a bit larger buffer to make sure that the function does not write outside its designated space.
-        let mut buf: [u8; 18] = [0u8; 18];
+        let mut buf = [0u8; 18];
         unsafe {
             // Call a bunch of times to make sure the stack does not get messed up or something like that.
             for _ in 0..100 {
@@ -43,7 +62,7 @@ mod tests {
 
     #[test]
     fn rdtsc() {
-        let mut buf: [u8; 10] = [0u8; 10];
+        let mut buf = [0u8; 10];
         unsafe {
             // Call a bunch of times to make sure the stack does not get messed up or something like that.
             for _ in 0..100 {
@@ -68,7 +87,7 @@ mod tests {
 
     #[test]
     fn tib() {
-        let mut buf: [u8; 112] = [0u8; 112];
+        let mut buf = [0u8; 112];
         unsafe {
             // Call a bunch of times to make sure the stack does not get messed up or something like that.
             for _ in 0..100 {
@@ -81,5 +100,14 @@ mod tests {
 
         let tib_pid = get_tib_pid(&buf);
         assert_eq!(tib_pid, id(), "Process id parsed from TIB is incorrect.");
+    }
+
+    #[test]
+    fn seed_stdrng() {
+        let mut rng1 = StdRng::from_seed(super::get_rand_seed());
+        let mut rng2 = StdRng::from_seed(super::get_rand_seed());
+
+        // TODO this test is probably stupid, change with something that does not have a chance of breaking?
+        assert_ne!(rng1.next_u64(), rng2.next_u64());
     }
 }

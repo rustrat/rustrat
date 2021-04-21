@@ -4,5 +4,11 @@ version = "0.1.0"
 authors = ["Emil Taylor Bye <phptph@gmail.com>"]
 edition = "2018"
 
+[dependencies]
+blake2 = "0.9"
+
+[dev-dependencies]
+rand = "0.8"
+
 [build-dependencies]
 cc = "1.0"
