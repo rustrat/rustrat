@@ -15,7 +15,7 @@ If the database schema is changed, a new example database needs to be created. F
 * `cargo sqlx -D sqlite://rustrat-server/dbtemplate.sqlite3?mode=ro prepare --merged`
 
 ## Usage
-* `rustrat-client-exe.exe path\to\webassembly.wasm function_name`
+* `rustrat-client-exe.exe wasm path\to\webassembly.wasm function_name`
 * `rundll32 rustrat_client.dll,rundll_run path\to\webassembly.wasm function_name`
 
 Note that the functionality to execute compiled WebAssembly will be moved to a separate crate for development/debugging purposes.

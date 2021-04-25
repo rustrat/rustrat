@@ -6,6 +6,7 @@ use std::ffi::{c_void, CStr};
 use std::os::raw::c_char;
 use std::{fs::File, io::Read};
 
+pub mod connector;
 pub mod error;
 pub mod ffi;
 pub mod wasm;
@@ -55,6 +56,7 @@ pub extern "C" fn run(path: *const c_char, fn_name: *const c_char) -> i32 {
     };
 }
 
+// TODO run_webassembly_file funcition, run_webassembly taking AsRef<[u8]> or smth
 pub fn run_webassembly(path: &str, fn_name: &str) -> Result<i32> {
     let mut file = File::open(path)?;
     let mut file_buffer = Vec::new();

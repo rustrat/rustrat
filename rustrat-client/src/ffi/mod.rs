@@ -15,6 +15,12 @@ extern "C" {
     fn GetProcAddress(handle: *mut c_void, fn_name: *mut c_char) -> *mut c_void;
 }
 
+// TODO macro to convert C header information to register_fn or something
+pub enum Win32FfiTypes {
+    LPCSTR = FfiType::POINTER as isize,
+    DWORD = FfiType::SINT32 as isize,
+}
+
 #[derive(FromPrimitive, Copy, Clone)]
 pub enum FfiType {
     DOUBLE = 3,
