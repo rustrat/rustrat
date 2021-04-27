@@ -13,6 +13,7 @@ extern "C" {
     fn GetModuleHandleA(libraryName: *const c_char) -> *mut c_void;
     fn LoadLibraryA(libraryName: *const c_char) -> *mut c_void;
     fn GetProcAddress(handle: *mut c_void, fn_name: *mut c_char) -> *mut c_void;
+    pub fn GetLastError() -> u32;
 }
 
 // TODO macro to convert C header information to register_fn or something

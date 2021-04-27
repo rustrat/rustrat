@@ -1246,6 +1246,7 @@ dependencies = [
 name = "rustrat-client"
 version = "0.1.0"
 dependencies = [
+ "bitflags",
  "libffi",
  "num-derive",
  "num-traits",

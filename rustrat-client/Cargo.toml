@@ -12,6 +12,7 @@ name = "rustrat-client-exe"
 path = "src/main.rs"
 
 [dependencies]
+bitflags = "1.2"
 structopt = "0.3"
 wasm3 = "0.1.3"
 libffi = "1.0.0"

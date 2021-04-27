@@ -11,6 +11,9 @@ pub mod error;
 pub mod ffi;
 pub mod wasm;
 
+#[macro_use]
+extern crate bitflags;
+
 extern crate num_derive;
 
 // TODO get random values without getrandom (seed)

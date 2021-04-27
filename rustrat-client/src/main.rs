@@ -18,7 +18,7 @@ fn main() -> rustrat_client::error::Result<()> {
             let result = rustrat_client::run_webassembly(&path, &fn_name)?;
             std::process::exit(result);
         }
-        RustratClient::Http => unsafe {
+        RustratClient::Http => {
             let result = rustrat_client::connector::http::do_http_get(
                 "https://www.wodinaz.com/".to_string(),
             )
