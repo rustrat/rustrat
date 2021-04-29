@@ -19,7 +19,7 @@ extern "C" {
 // TODO macro to convert C header information to register_fn or something
 pub enum Win32FfiTypes {
     LPCSTR = FfiType::POINTER as isize,
-    DWORD = FfiType::SINT32 as isize,
+    DWORD = FfiType::UINT32 as isize,
 }
 
 #[derive(FromPrimitive, Copy, Clone)]

