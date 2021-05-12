@@ -778,6 +778,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51b9bbe6c47d51fc3e1a9b945965946b4c44142ab8792c50835a980d362c2710"
 dependencies = [
  "cfg-if",
+ "serde",
 ]
 
 [[package]]
@@ -1246,12 +1247,18 @@ dependencies = [
 name = "rustrat-client"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "bitflags",
  "libffi",
+ "log",
  "num-derive",
  "num-traits",
+ "rand 0.8.3",
+ "rustrat-common",
+ "rustrat-prng-seed",
  "structopt",
  "wasm3",
+ "x25519-dalek",
 ]
 
 [[package]]
@@ -1280,12 +1287,15 @@ version = "0.1.0"
 dependencies = [
  "base64",
  "chrono",
+ "lazy_static",
+ "log",
  "rand 0.8.3",
  "rustrat-common",
  "serde",
  "sqlx",
  "tokio",
  "warp",
+ "x25519-dalek",
 ]
 
 [[package]]

@@ -16,8 +16,6 @@ extern crate bitflags;
 
 extern crate num_derive;
 
-// TODO get random values without getrandom (seed)
-
 // TODO make more robust, attempt to parse arguments somewhat
 #[no_mangle]
 pub unsafe extern "C" fn rundll_run(
@@ -34,7 +32,7 @@ pub unsafe extern "C" fn rundll_run(
     let args: Vec<&str> = cmdstr.split(" ").collect();
     assert!(args.len() >= 2);
 
-    run_webassembly(args[0], args[1]).unwrap();
+    run_webassembly_file(args[0], args[1]).unwrap();
 }
 
 #[no_mangle]
@@ -53,22 +51,18 @@ pub extern "C" fn run(path: *const c_char, fn_name: *const c_char) -> i32 {
         }
     };
 
-    return match run_webassembly(path_str, fn_name_str) {
+    return match run_webassembly_file(path_str, fn_name_str) {
         Ok(result) => result,
         Err(_) => -1,
     };
 }
 
-// TODO run_webassembly_file funcition, run_webassembly taking AsRef<[u8]> or smth
-pub fn run_webassembly(path: &str, fn_name: &str) -> Result<i32> {
-    let mut file = File::open(path)?;
-    let mut file_buffer = Vec::new();
-    file.read_to_end(&mut file_buffer)?;
-
+pub fn run_webassembly<T: AsRef<[u8]>>(wasm: T, fn_name: &str) -> Result<i32> {
+    // TODO remove ugly global FnTable, use one for entire program?
     wrappers::setup_fn_table();
 
     let env = WasmEnvironment::new(10 * 10 * 1024)?;
-    let mut wasm_module = env.load_module(&file_buffer)?;
+    let mut wasm_module = env.load_module(wasm.as_ref())?;
 
     match wasm_module.link_function::<(u32,), i32>("rustrat", "has_fn", wrappers::has_fn_wrapper) {
         Ok(_) | Err(wasm3::error::Error::FunctionNotFound) => {}
@@ -105,4 +99,12 @@ pub fn run_webassembly(path: &str, fn_name: &str) -> Result<i32> {
     let func = wasm_module.find_function::<(), i32>(fn_name)?;
 
     Ok(func.call()?)
+}
+
+pub fn run_webassembly_file(path: &str, fn_name: &str) -> Result<i32> {
+    let mut file = File::open(path)?;
+    let mut file_buffer = Vec::new();
+    file.read_to_end(&mut file_buffer)?;
+
+    run_webassembly(file_buffer, fn_name)
 }

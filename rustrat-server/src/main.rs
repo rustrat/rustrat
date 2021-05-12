@@ -1,10 +1,26 @@
+use std::convert::TryInto;
+
 use rustrat_common::encryption;
 
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+#[macro_use]
+extern crate lazy_static;
+
+lazy_static! {
+    static ref LOGGER: rustrat_server::log::Logger =
+        rustrat_server::log::Logger::new(log::Level::Info);
+    static ref _INIT_LOG: () = log::set_logger(&*LOGGER)
+        .map(|()| log::set_max_level(log::LevelFilter::Info))
+        .unwrap();
+}
+
 #[tokio::main]
 pub async fn main() {
+    lazy_static::initialize(&_INIT_LOG);
+
+    // TODO handle C-c?
     // TODO move things in main out to other files
     let db_pool = rustrat_server::persistence::prepare_database_pool("rustrat.db")
         .await
@@ -12,30 +28,20 @@ pub async fn main() {
 
     // TODO do not hard code private key file location?
     let private_key_file = ".privatekey";
-    let private_key = match OpenOptions::new().read(true).open(private_key_file).await {
+    let private_key: encryption::PrivateKey = match OpenOptions::new()
+        .read(true)
+        .open(private_key_file)
+        .await
+    {
         Ok(mut file) => {
-            let mut key: encryption::PrivateKey = Default::default();
             let mut contents = vec![];
             file.read_to_end(&mut contents).await.unwrap();
 
-            // TODO flag to panic instead of silently overwriting privatekey file?
-            if contents.len() != key.len() {
-                let mut rng = rand::thread_rng();
-                rand::Rng::fill(&mut rng, &mut key);
-                drop(file);
-
-                OpenOptions::new()
-                    .write(true)
-                    .truncate(true)
-                    .open(private_key_file)
-                    .await
-                    .unwrap()
-                    .write_all(&key)
-                    .await
-                    .unwrap();
+            match contents.try_into() {
+                Ok(key) => key,
+                // TODO panic or not?
+                Err(_) => panic!("Private key file appears corrupted, could not convert file contents to private key."),
             }
-
-            key
         }
 
         Err(_) => {
@@ -57,6 +63,13 @@ pub async fn main() {
             key
         }
     };
+
+    let public_key =
+        x25519_dalek::PublicKey::from(&x25519_dalek::StaticSecret::from(private_key)).to_bytes();
+    log::info!(
+        "Server starting with public key {}",
+        base64::encode_config(public_key, base64::URL_SAFE_NO_PAD)
+    );
 
     let mut core_task = rustrat_server::core::CoreTask::new(private_key, db_pool).await;
 

@@ -133,6 +133,8 @@ impl FnTable {
         function: String,
         arguments: &[middle::Arg],
     ) -> error::Result<R> {
+        log::debug!("Using libffi to call function {}", function);
+
         let foreign_fn = self
             .0
             .get(&function)

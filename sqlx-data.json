@@ -1,5 +1,23 @@
 {
   "db": "SQLite",
+  "1072d5401fd7e940def3b4d6750c54ad9022c31db60d978bdf6b0ccf4b727a3a": {
+    "query": "SELECT rat_id FROM rats WHERE public_key = ?",
+    "describe": {
+      "columns": [
+        {
+          "name": "rat_id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "parameters": {
+        "Right": 1
+      },
+      "nullable": [
+        false
+      ]
+    }
+  },
   "299e95bac3d3f9a38aa2f5e3538a67bc450432be3ea2af8fef89fbd58b236c25": {
     "query": "SELECT COUNT(jobs.job_id) as tasks FROM jobs, rats WHERE rats.public_key = ? AND rats.rat_id = jobs.rat_id AND started = false",
     "describe": {
@@ -42,6 +60,16 @@
       "columns": [],
       "parameters": {
         "Right": 1
+      },
+      "nullable": []
+    }
+  },
+  "a8cd1d13c093f5ae1e02d7e854492e6f0f3c87532d7754139cf7591102559194": {
+    "query": "INSERT INTO jobs (rat_id, created, last_update, started, done, job_type, payload) VALUES (?, datetime('now'), datetime('now'), false, false, 'task', ?)",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Right": 2
       },
       "nullable": []
     }

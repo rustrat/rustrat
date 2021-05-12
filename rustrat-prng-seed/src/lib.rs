@@ -18,9 +18,10 @@ extern "C" {
     fn copy_tib(output_buffer: *mut u8) -> u64;
 }
 
+// TODO pointer or function address?
 pub fn get_rand_seed() -> [u8; 32] {
     // The different functions expects 16, 8, and 110 bytes, so we need a buffer of at least (16+8+110=)134 bytes.
-    let mut out_buf = [0u8; 124];
+    let mut out_buf = [0u8; 134];
 
     let (rdrand, remainder) = out_buf.split_at_mut(16);
     let (rdtsc, tib) = remainder.split_at_mut(8);

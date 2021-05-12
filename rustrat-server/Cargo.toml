@@ -16,3 +16,6 @@ chrono = "0.4"
 rand = "0.8.0"
 warp = "0.3"
 base64 = "0.13"
+x25519-dalek = "1.1"
+log = { version = "0.4", features = ["std", "serde"] }
+lazy_static = "1.4.0"

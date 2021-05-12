@@ -14,8 +14,6 @@ fn with_tx(tx: Sender<Job>) -> impl Filter<Extract = (Sender<Job>,), Error = Inf
     warp::any().map(move || tx.clone())
 }
 
-// TODO up next: Handlers for encrypted calls
-
 async fn checkin(
     tx: Sender<Job>,
     pkey_string: String,
@@ -85,10 +83,9 @@ async fn encrypted_request<T: AsRef<[u8]>>(
     tx: Sender<Job>,
     request: T,
 ) -> Result<warp::reply::Response, Infallible> {
-    let encrypted_message = match common_messages::deserialize::<
-        common_messages::rat_to_server::EncryptedMessage,
-    >(request.as_ref())
-    {
+    let msg = match common_messages::deserialize::<common_messages::rat_to_server::Message>(
+        request.as_ref(),
+    ) {
         Ok(msg) => msg,
         Err(_) => {
             return Ok(StatusCode::BAD_REQUEST.into_response());
@@ -98,9 +95,7 @@ async fn encrypted_request<T: AsRef<[u8]>>(
     // TODO prettify? Implement From for various structs?
     let (reply_tx, reply_rx) = oneshot::channel();
     let job = Job {
-        message: Box::new(Task::RatToServer(
-            common_messages::rat_to_server::Message::EncryptedMessage(encrypted_message),
-        )),
+        message: Box::new(Task::RatToServer(msg)),
         tx: reply_tx,
     };
 
@@ -150,7 +145,14 @@ pub async fn run(tx: Sender<Job>) {
         .and(warp::body::bytes())
         .and_then(encrypted_request);
 
-    warp::serve(checkin.or(encrypted_get).or(encrypted_post))
-        .run(([127, 0, 0, 1], 1337))
-        .await;
+    let request_log = warp::log(module_path!());
+
+    warp::serve(
+        checkin
+            .or(encrypted_get)
+            .or(encrypted_post)
+            .with(request_log),
+    )
+    .run(([127, 0, 0, 1], 1337))
+    .await;
 }
