@@ -1,0 +1,9 @@
+[package]
+name = "update-dbtemplate"
+version = "0.1.0"
+authors = ["Emil Taylor Bye <phptph@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+rustrat-server = { version = "0.1", path = "../../rustrat-server" }
+tokio = { version = "1.2", features = ["full", "test-util"] }
