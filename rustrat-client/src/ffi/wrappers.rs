@@ -166,6 +166,8 @@ pub unsafe extern "C" fn call_fn_wrapper(
         });
     }
 
+    log::debug!("Calling function {} from WASM using libffi", fn_str);
+
     match foreign_fn.return_type {
         FfiType::DOUBLE => {
             let return_value: f64 = foreign_fn.call(args.as_slice());

@@ -15,6 +15,15 @@ If the database schema is changed, a new example database needs to be created. F
 * `cargo sqlx -D sqlite://rustrat-server/dbtemplate.sqlite3?mode=ro prepare --merged`
 
 ## Usage
+### Rat to server communication
+* `cd payloads`
+* `cargo build`
+* `cd ..`
+* `cargo run --bin rustrat-server` # Make sure to note the public key, open a new terminal
+* `cargo run --bin rustrat-client-exe rustrat-client-exe rat http://localhost:1337 <public key from rustrat-server>`
+* A message box should eventually appear
+
+### Run wasm blobs
 * `rustrat-client-exe.exe wasm path\to\webassembly.wasm function_name`
 * `rundll32 rustrat_client.dll,rundll_run path\to\webassembly.wasm function_name`
 
