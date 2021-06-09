@@ -49,7 +49,7 @@ impl Encrypted {
 
         Ok(Encrypted {
             nonce: raw_nonce,
-            ciphertext: ciphertext,
+            ciphertext,
         })
     }
 }

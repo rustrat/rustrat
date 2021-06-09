@@ -9,13 +9,14 @@ crate-type = ["lib"]
 
 [dependencies]
 rustrat-common = { version = "0.1", path = "../rustrat-common" }
-tokio = { version = "1.2", features = ["full", "test-util"] }
+
+base64 = "0.13"
+chrono = "0.4"
+lazy_static = "1.4.0"
+log = { version = "0.4", features = ["std", "serde"] }
+rand = "0.8.0"
 serde = { version = "1.0", features = ["derive"] }
 sqlx = { version = "0.5.1", features = ["runtime-tokio-rustls", "sqlite", "macros", "chrono", "offline"]}
-chrono = "0.4"
-rand = "0.8.0"
+tokio = { version = "1.2", features = ["full", "test-util"] }
 warp = "0.3"
-base64 = "0.13"
 x25519-dalek = "1.1"
-log = { version = "0.4", features = ["std", "serde"] }
-lazy_static = "1.4.0"

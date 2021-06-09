@@ -1,6 +1,8 @@
 use std::fs;
 use std::path::Path;
 
+// TODO logging instead of printing?
+// TODO also, the name of this crate is wrong, it does not update anything, just deletes database files
 fn delete_file<P: AsRef<Path>>(path: P) {
     let path = path.as_ref();
 

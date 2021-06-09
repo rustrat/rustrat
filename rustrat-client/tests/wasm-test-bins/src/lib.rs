@@ -29,6 +29,7 @@ extern "C" {
     ) -> i32;
     fn call_fn_u32(function: *const c_char, arguments: *mut c_void) -> u32;
     fn call_fn_u64(function: *const c_char, arguments: *mut c_void) -> u64;
+    fn print(out: *const c_char) -> i32;
 }
 pub enum FfiType {
     DOUBLE = 3,
@@ -119,4 +120,15 @@ pub unsafe extern "C" fn virtualfree(mut ptr: u64) -> u32 {
         fn_name.as_ptr(),
         fn_args.as_mut_ptr() as *mut _ as *mut c_void,
     )
+}
+
+#[no_mangle]
+pub extern "C" fn do_print() -> i32 {
+    let out = CString::new("Hello WASM!").unwrap();
+
+    unsafe {
+        print(out.as_ptr());
+    }
+
+    0
 }

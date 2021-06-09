@@ -3,6 +3,8 @@ use crate::error::*;
 use crate::messages::{deserialize, serialize};
 use serde::{Deserialize, Serialize};
 
+// TODO encrypt at the outmost layer (so that serialized + encrypted is sent instead of encrypted + serialized)
+
 #[derive(Deserialize, Serialize, Clone)]
 pub struct EncryptedMessage {
     pub data: Encrypted,
@@ -15,10 +17,11 @@ pub enum Message {
 
 #[derive(Deserialize, Serialize, Clone)]
 pub enum Response {
+    Nop,
     CheckinSuccessful,
     NumberOfPendingTasks(u32),
     NoTasks,
-    Task(Task),
+    Task { id: i64, task: Task },
     Exit,
 }
 

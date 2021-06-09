@@ -1,14 +1,22 @@
 use rustrat_client::ffi::wrappers;
-use rustrat_client::wasm::*;
+use rustrat_client::ffi::FnTable;
+use rustrat_client::runtime::executor::Environment;
+use rustrat_client::runtime::CommonUtils;
+
 use wasm3;
 
 #[test]
 fn test_adder() {
-    let env = WasmEnvironment::new(10 * 10 * 1024).expect("Unable to create WASM environment");
-    let wasm_module = env
-        .load_module(&include_bytes!("wasm-test-bins/wasm_test_bins.wasm")[..])
-        .expect("Unable to load module");
-    let func = wasm_module
+    let common_utils = CommonUtils::new();
+    let mut env = Environment::new(
+        &include_bytes!("wasm-test-bins/wasm_test_bins.wasm")[..],
+        common_utils,
+        |_| {},
+    )
+    .expect("Unable to create WASM environment.");
+
+    let wasm_env = env.get_wasm_environment();
+    let func = wasm_env
         .find_function::<(u32, u32), u32>("add")
         .expect("Unable to find the add function");
 
@@ -27,10 +35,16 @@ wasm3::make_func_wrapper!(external_fn_wrapper: external_fn(param: u32) -> u32);
 
 #[test]
 fn test_external_fn() {
-    let env = WasmEnvironment::new(10 * 10 * 1024).expect("Unable to create WASM environment");
-    let mut wasm_module = env
-        .load_module(&include_bytes!("wasm-test-bins/wasm_test_bins.wasm")[..])
-        .expect("Unable to load module");
+    let common_utils = CommonUtils::new();
+    let mut env = Environment::new(
+        &include_bytes!("wasm-test-bins/wasm_test_bins.wasm")[..],
+        common_utils,
+        |_| {},
+    )
+    .expect("Unable to create WASM environment.");
+
+    let wasm_env = env.get_wasm_environment();
+    let mut wasm_module = wasm_env.modules().next().expect("No WASM modules found.");
 
     wasm_module
         .link_function::<(u32,), u32>("env", "external_fn", external_fn_wrapper)
@@ -52,27 +66,19 @@ fn test_external_fn() {
 
 #[test]
 fn test_wasm_virtualalloc_virtualfree() {
-    let env = WasmEnvironment::new(10 * 10 * 1024).expect("Unable to create WASM environment");
-    let mut wasm_module = env
-        .load_module(&include_bytes!("wasm-test-bins/wasm_test_bins.wasm")[..])
-        .expect("Unable to load module");
+    let common_utils = CommonUtils::new();
+    let mut env = Environment::new(
+        &include_bytes!("wasm-test-bins/wasm_test_bins.wasm")[..],
+        common_utils.clone(),
+        |_| {},
+    )
+    .expect("Unable to create WASM environment.");
 
-    wasm_module
-        .link_function::<(u32,), i32>("rustrat", "has_fn", wrappers::has_fn_wrapper)
-        .expect("Unable to link has_fn");
-    wasm_module
-        .link_function::<(u32, u32, u32, i32, u32), i32>(
-            "rustrat",
-            "register_fn",
-            wrappers::register_fn_wrapper,
-        )
-        .expect("Unable to link register_fn");
-    wasm_module
-        .link_function::<(u32, u32), u32>("rustrat", "call_fn_u32", wrappers::call_fn_wrapper)
-        .expect("Unable to link call_fn_u32");
-    wasm_module
-        .link_function::<(u32, u32), u64>("rustrat", "call_fn_u64", wrappers::call_fn_wrapper)
-        .expect("Unable to link call_fn_u64");
+    let wasm_env = env.get_wasm_environment();
+    let mut wasm_module = wasm_env.modules().next().expect("No WASM modules found.");
+
+    wrappers::link_ffi_bindings(&mut wasm_module, &common_utils.fn_table)
+        .expect("Unable to link ffi bindings.");
 
     let virtualalloc = wasm_module
         .find_function::<(), u64>("virtualalloc_u64")
@@ -83,7 +89,8 @@ fn test_wasm_virtualalloc_virtualfree() {
 
     for _ in 0..100 {
         unsafe {
-            wrappers::setup_fn_table();
+            common_utils.fn_table.replace(FnTable::new());
+
             let ptr = virtualalloc
                 .call()
                 .expect("Unable to call the virtualalloc_u64 function.");

@@ -54,6 +54,16 @@
       ]
     }
   },
+  "51014f5fa56e535c870df8799cc0d6e5ab4cb51df859d698d0ffb829fcb59530": {
+    "query": "INSERT INTO jobs_output (job_id, output, created) VALUES (?, ?, datetime('now'));",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Right": 2
+      },
+      "nullable": []
+    }
+  },
   "a7600d4b5070103d408361399c18e6e5d964f5b99be9b0933f4bf316326bf5f7": {
     "query": "UPDATE rats SET last_callback = datetime('now'), alive = false WHERE public_key = ?",
     "describe": {
@@ -106,6 +116,16 @@
   },
   "b6eea4e4331dbc7aa0a502b2740f55c7bcaaede78f9ec6da747ff87fa044b4fe": {
     "query": "INSERT INTO rats (public_key, first_seen, last_callback, alive) VALUES (?, datetime('now'), datetime('now'), true)",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Right": 1
+      },
+      "nullable": []
+    }
+  },
+  "d61789c016ba553f9a09e09050aeefdabc1f99bffcfda8a61dca8b55fdfa91a4": {
+    "query": "UPDATE jobs SET done = true WHERE job_id = ?",
     "describe": {
       "columns": [],
       "parameters": {

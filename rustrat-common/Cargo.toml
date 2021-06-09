@@ -5,8 +5,8 @@ authors = ["Emil Taylor Bye <phptph@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-serde = { version = "1.0", features = ["derive"] }
 bincode = "1.3"
-chacha20poly1305 = { version = "0.7", features = ["xchacha20poly1305"] }
+chacha20poly1305 = { version = "0.8", features = ["xchacha20poly1305"] }
 rand = "0.8.0"
+serde = { version = "1.0", features = ["derive"] }
 x25519-dalek = "1.1"

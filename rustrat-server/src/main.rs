@@ -20,7 +20,6 @@ lazy_static! {
 pub async fn main() {
     lazy_static::initialize(&_INIT_LOG);
 
-    // TODO handle C-c?
     // TODO move things in main out to other files
     let db_pool = rustrat_server::persistence::prepare_database_pool("rustrat.db")
         .await
@@ -71,7 +70,7 @@ pub async fn main() {
         base64::encode_config(public_key, base64::URL_SAFE_NO_PAD)
     );
 
-    let mut core_task = rustrat_server::core::CoreTask::new(private_key, db_pool).await;
+    let mut core_task = rustrat_server::core::CoreTask::new(private_key, db_pool.clone()).await;
 
     {
         let tx = core_task.tx.clone();
@@ -80,5 +79,23 @@ pub async fn main() {
         });
     }
 
+    {
+        let db_pool = db_pool.clone();
+        tokio::spawn(async move {
+            tokio::signal::ctrl_c().await.unwrap();
+            log::info!("Received signal to shut down, shutting down");
+
+            // TODO shut down tasks
+
+            // TODO figure out what is up with sqlite timing out when starting rustrat-server
+            drop(db_pool.writer);
+            drop(db_pool.reader);
+
+            // TODO don't exit()? Possible if tasks are shut down?
+            std::process::exit(0);
+        });
+    }
+
+    // TODO handle C-c (shutdown), destroy sqlite objects etc
     core_task.run().await;
 }

@@ -16,12 +16,6 @@ extern "C" {
     pub fn GetLastError() -> u32;
 }
 
-// TODO macro to convert C header information to register_fn or something
-pub enum Win32FfiTypes {
-    LPCSTR = FfiType::POINTER as isize,
-    DWORD = FfiType::UINT32 as isize,
-}
-
 #[derive(FromPrimitive, Copy, Clone)]
 pub enum FfiType {
     DOUBLE = 3,
@@ -40,6 +34,13 @@ pub enum FfiType {
 }
 
 impl FfiType {
+    // TODO macro to convert C header information to register_fn or something
+    pub const LPCSTR: FfiType = FfiType::POINTER;
+    pub const LPVOID: FfiType = FfiType::POINTER;
+    pub const DWORD: FfiType = FfiType::UINT32;
+    pub const WORD: FfiType = FfiType::UINT16;
+    pub const INTERNET_PORT: FfiType = FfiType::WORD;
+
     fn to_libffi_type(&self) -> middle::Type {
         match *self {
             FfiType::DOUBLE => middle::Type::f64(),
@@ -63,7 +64,8 @@ struct ForeignFn {
     cif: middle::Cif,
     n_args: usize,
     fn_ptr: middle::CodePtr,
-    return_type: FfiType,
+    // TODO use return type for runtime checking?
+    _return_type: FfiType,
     arg_types: Vec<FfiType>,
 }
 
@@ -86,6 +88,7 @@ impl FnTable {
         self.0.contains_key(&function)
     }
 
+    // TODO accept &str instead?
     pub fn register_fn(
         &mut self,
         function: String,
@@ -117,11 +120,11 @@ impl FnTable {
         self.0.insert(
             function,
             ForeignFn {
-                cif: cif,
+                cif,
                 fn_ptr: middle::CodePtr(fn_ptr),
                 n_args: arg_types.len(),
-                return_type: return_type,
-                arg_types: arg_types,
+                _return_type: return_type,
+                arg_types,
             },
         );
 
@@ -174,12 +177,12 @@ fn get_fn_ptr(fn_name: &str, library_name: &str) -> error::Result<*mut c_void> {
     unsafe { CString::from_raw(fn_name_arg) };
 
     if fn_ptr.is_null() {
-        return Err(error::Error::FunctionNotFound {
+        Err(error::Error::FunctionNotFound {
             function: fn_name.to_string(),
             library: library_name.to_string(),
-        });
+        })
     } else {
-        return Ok(fn_ptr);
+        Ok(fn_ptr)
     }
 }
 

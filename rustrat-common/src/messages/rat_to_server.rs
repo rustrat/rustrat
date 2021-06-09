@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Deserialize, Serialize, Clone)]
 pub struct CheckIn(PublicKey);
 
+// TODO encrypt at the outmost layer (so that serialized + encrypted is sent instead of encrypted + serialized)
+
 #[derive(Deserialize, Serialize, Clone)]
 pub struct EncryptedMessage {
     pub public_key: PublicKey,
@@ -14,14 +16,19 @@ pub struct EncryptedMessage {
 
 #[derive(Deserialize, Serialize, Clone)]
 pub enum Message {
-    CheckIn(PublicKey),
+    CheckIn(EncryptedMessage),
     EncryptedMessage(EncryptedMessage),
 }
 
 #[derive(Deserialize, Serialize, Clone)]
 pub enum Request {
+    Nop,
     NumberOfPendingTasks,
     GetPendingTask,
+    // TODO should output be a request or something else?
+    Output { task_id: i64, output: String },
+    TaskDone { task_id: i64, result: i32 },
+    TaskFailed { task_id: i64 },
     Exit,
 }
 
@@ -45,7 +52,7 @@ impl Request {
         let ciphertext = Encrypted::from_byte_array(shared_key, serialized_object, rng)?;
 
         Ok(EncryptedMessage {
-            public_key: public_key,
+            public_key,
             data: ciphertext,
         })
     }

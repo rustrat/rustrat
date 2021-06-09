@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Emil Taylor Bye <phptph@gmail.com>"]
 edition = "2018"
 
+# TODO separate crates for exe/dll
 [lib]
 crate-type = ["lib", "cdylib"]
 
@@ -14,13 +15,16 @@ path = "src/main.rs"
 [dependencies]
 rustrat-common = { version = "0.1", path = "../rustrat-common" }
 rustrat-prng-seed = { version = "0.1", path = "../rustrat-prng-seed" }
+
+base64 = "0.13"
+bincode = "1.3"
 bitflags = "1.2"
+chacha20poly1305 = { version = "0.8", features = ["xchacha20poly1305"] }
+libffi = "1.0.0"
+log = { version = "0.4", features = ["max_level_debug", "release_max_level_off"] }
+num-derive = "0.3"
+num-traits = "0.2"
+rand = "0.8"
 structopt = "0.3"
 wasm3 = "0.1.3"
-libffi = "1.0.0"
-num-traits = "0.2"
-num-derive = "0.3"
 x25519-dalek = "1.1"
-rand = "0.8"
-base64 = "0.13"
-log = { version = "0.4", features = ["max_level_debug", "release_max_level_off"] }

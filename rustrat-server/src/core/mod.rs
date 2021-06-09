@@ -44,10 +44,11 @@ impl CoreTask {
                         let shared_key = encryption::get_shared_key(private_key, public_key);
                         shared_keys.insert(public_key, shared_key);
                     }
-                    Err(_) => {
-                        // TODO do something here or just silently ignore?
+
+                    Err(err) => {
+                        log::error!("Unable to read public key: {:?}", err);
                     }
-                };
+                }
             }
 
             shared_keys
@@ -59,11 +60,11 @@ impl CoreTask {
         let (tx, rx) = channel::<Job>(32);
 
         CoreTask {
-            shared_keys: shared_keys,
-            private_key: private_key,
-            db_pool: db_pool,
-            rx: rx,
-            tx: tx,
+            shared_keys,
+            private_key,
+            db_pool,
+            rx,
+            tx,
         }
     }
 
@@ -87,14 +88,29 @@ impl CoreTask {
     ) {
         let db_pool = self.db_pool.clone();
 
+        // TODO rewrite this, divide into smaller sections. Log error if no response is sent?
         match task {
-            rat_to_server::Message::CheckIn(public_key) => {
+            rat_to_server::Message::CheckIn(encrypted_message) => {
+                let public_key = &encrypted_message.public_key;
+
                 if self.shared_keys.contains_key(public_key) {
                     let _ = reply_channel.send(Err(Error::PublicKeyAlreadyExistsOnCheckin));
                     return;
                 }
 
                 let shared_key = encryption::get_shared_key(self.private_key, *public_key);
+
+                // TODO avoid cloning?
+                let encrypted_message = encrypted_message.clone();
+                let request = spawn_blocking(move || encrypted_message.to_request(shared_key))
+                    .await
+                    .unwrap();
+                if request.is_err() {
+                    let _ = reply_channel.send(Err(Error::DecryptionError));
+                    return;
+                }
+                // TODO parse checkin message?
+
                 self.shared_keys.insert(*public_key, shared_key);
 
                 // TODO is it possible to do this without creating a new vec?
@@ -224,7 +240,10 @@ impl CoreTask {
                             tables::JobType::Task => {
                                 let task: server_to_rat::Task = deserialize(&job.payload).unwrap();
                                 self.send_encrypted_response(
-                                    server_to_rat::Response::Task(task),
+                                    server_to_rat::Response::Task {
+                                        id: job.job_id,
+                                        task,
+                                    },
                                     reply_channel,
                                     shared_key,
                                 )
@@ -249,6 +268,107 @@ impl CoreTask {
 
                         self.send_encrypted_response(
                             server_to_rat::Response::Exit,
+                            reply_channel,
+                            shared_key,
+                        )
+                        .await
+                    }
+
+                    rat_to_server::Request::Nop => {
+                        let mut transaction = db_pool.writer.begin().await.unwrap();
+
+                        sqlx::query!(
+                            "UPDATE rats SET last_callback = datetime('now') WHERE public_key = ?",
+                            pk_vec
+                        )
+                        .execute(&mut transaction)
+                        .await
+                        .unwrap();
+
+                        self.send_encrypted_response(
+                            server_to_rat::Response::Nop,
+                            reply_channel,
+                            shared_key,
+                        )
+                        .await
+                    }
+
+                    rat_to_server::Request::Output { task_id, output } => {
+                        let mut transaction = db_pool.writer.begin().await.unwrap();
+
+                        sqlx::query!(
+                            "UPDATE rats SET last_callback = datetime('now') WHERE public_key = ?",
+                            pk_vec
+                        )
+                        .execute(&mut transaction)
+                        .await
+                        .unwrap();
+
+                        log::info!("Output from task {}: {}", task_id, output);
+
+                        sqlx::query!(
+                            "INSERT INTO jobs_output (job_id, output, created) VALUES (?, ?, datetime('now'));",
+                            task_id,
+                            output
+                        )
+                        .execute(&mut transaction)
+                        .await
+                        .unwrap();
+
+                        self.send_encrypted_response(
+                            server_to_rat::Response::Nop,
+                            reply_channel,
+                            shared_key,
+                        )
+                        .await
+                    }
+
+                    rat_to_server::Request::TaskDone { task_id, result: _ } => {
+                        let mut transaction = db_pool.writer.begin().await.unwrap();
+
+                        sqlx::query!(
+                            "UPDATE rats SET last_callback = datetime('now') WHERE public_key = ?",
+                            pk_vec
+                        )
+                        .execute(&mut transaction)
+                        .await
+                        .unwrap();
+
+                        log::info!("Job {} done", task_id);
+
+                        sqlx::query!("UPDATE jobs SET done = true WHERE job_id = ?", task_id)
+                            .execute(&mut transaction)
+                            .await
+                            .unwrap();
+
+                        self.send_encrypted_response(
+                            server_to_rat::Response::Nop,
+                            reply_channel,
+                            shared_key,
+                        )
+                        .await
+                    }
+
+                    rat_to_server::Request::TaskFailed { task_id } => {
+                        let mut transaction = db_pool.writer.begin().await.unwrap();
+
+                        sqlx::query!(
+                            "UPDATE rats SET last_callback = datetime('now') WHERE public_key = ?",
+                            pk_vec
+                        )
+                        .execute(&mut transaction)
+                        .await
+                        .unwrap();
+
+                        log::error!("Job {} failed", task_id);
+
+                        sqlx::query!("UPDATE jobs SET done = true WHERE job_id = ?", task_id)
+                            .execute(&mut transaction)
+                            .await
+                            .unwrap();
+
+                        self.send_encrypted_response(
+                            server_to_rat::Response::Nop,
                             reply_channel,
                             shared_key,
                         )

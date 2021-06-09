@@ -73,5 +73,19 @@ CREATE TABLE IF NOT EXISTS jobs (
     .execute(&pool.writer)
     .await?;
 
+    // No primary key, I know, but will keep it this way for now, the table should not be altered, only used to list output from a job
+    sqlx::query(
+        "
+CREATE TABLE IF NOT EXISTS jobs_output (
+    job_id INTEGER NOT NULL,
+    output TEXT NOT NULL,
+    created DATETIME NOT NULL,
+    FOREIGN KEY(job_id) REFERENCES jobs(job_id)
+)
+        ",
+    )
+    .execute(&pool.writer)
+    .await?;
+
     Ok(())
 }
