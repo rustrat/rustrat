@@ -15,7 +15,7 @@ pub fn link_print_closure<F: Fn(&str) + 'static>(
         .link_closure(
             "rustrat",
             "print",
-            move |cc, (str_ptr,): (u32,)| match wasm_cstr_to_str(cc, str_ptr) {
+            move |cc, (str_ptr,): (u32,)| match wasm_cstr_to_str(&cc, str_ptr) {
                 Ok(output) => {
                     print_closure(output);
                     0
@@ -40,7 +40,7 @@ pub fn link_ffi_bindings(
         .link_closure(
             "rustrat",
             "has_fn",
-            move |cc, (str_ptr,): (u32,)| match wasm_cstr_to_str(cc, str_ptr) {
+            move |cc, (str_ptr,): (u32,)| match wasm_cstr_to_str(&cc, str_ptr) {
                 Ok(fn_name) => {
                     let fn_table = fn_table_rc.borrow();
                     if fn_table.has_fn(fn_name.to_string()) {
@@ -70,14 +70,14 @@ pub fn link_ffi_bindings(
                 i32,
                 u32,
             )| {
-                let fn_name = match wasm_cstr_to_str(cc, fn_str_ptr) {
+                let fn_name = match wasm_cstr_to_str(&cc, fn_str_ptr) {
                     Ok(fn_name) => fn_name,
                     Err(_) => {
                         log::error!("Error when attempting to convert function name to string.");
                         return 0;
                     }
                 };
-                let library_name = match wasm_cstr_to_str(cc, library_str_ptr) {
+                let library_name = match wasm_cstr_to_str(&cc, library_str_ptr) {
                     Ok(library_name) => library_name,
                     Err(_) => {
                         log::error!("Error when attempting to convert library name to string.");
@@ -122,7 +122,7 @@ pub fn link_ffi_bindings(
                 let fn_table = fn_table_rc.borrow();
 
                 unsafe {
-                    match do_ffi_call(&fn_table, cc, fn_str_ptr, args_ptr) {
+                    match do_ffi_call(&fn_table, &cc, fn_str_ptr, args_ptr) {
                         Ok(result) => result,
                         Err(err) => {
                             log::debug!("Unable to call ffi call: {:?}", err);
@@ -143,7 +143,7 @@ pub fn link_ffi_bindings(
                 let fn_table = fn_table_rc.borrow();
 
                 unsafe {
-                    match do_ffi_call(&fn_table, cc, fn_str_ptr, args_ptr) {
+                    match do_ffi_call(&fn_table, &cc, fn_str_ptr, args_ptr) {
                         Ok(result) => result,
                         Err(err) => {
                             log::debug!("Unable to call ffi call: {:?}", err);
@@ -211,7 +211,7 @@ unsafe fn do_ffi_call<R>(
     Ok(function.call(&arguments))
 }
 
-fn wasm_cstr_to_str(cc: &wasm3::CallContext, str_ptr: u32) -> Result<&str> {
+fn wasm_cstr_to_str<'callcontext>(cc: &'callcontext wasm3::CallContext, str_ptr: u32) -> Result<&'callcontext str> {
     let out;
     unsafe {
         let mem = cc.memory() as *const _ as *const i8;
