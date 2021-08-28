@@ -1,24 +1,23 @@
 use std::convert::TryInto;
 
+use once_cell::sync::OnceCell;
 use rustrat_common::encryption;
+use rustrat_server::badtui;
 
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::time;
 
-#[macro_use]
-extern crate lazy_static;
-
-lazy_static! {
-    static ref LOGGER: rustrat_server::log::Logger =
-        rustrat_server::log::Logger::new(log::Level::Info);
-    static ref _INIT_LOG: () = log::set_logger(&*LOGGER)
-        .map(|()| log::set_max_level(log::LevelFilter::Info))
-        .unwrap();
-}
+static LOGGER_INSTANCE: OnceCell<rustrat_server::log::Logger> = OnceCell::new();
 
 #[tokio::main]
 pub async fn main() {
-    lazy_static::initialize(&_INIT_LOG);
+    let (logger_tx, mut logger_rx) = tokio::sync::mpsc::unbounded_channel();
+    let logger = rustrat_server::log::Logger::new(log::Level::Info, logger_tx);
+    LOGGER_INSTANCE.set(logger).unwrap();
+    log::set_logger(LOGGER_INSTANCE.get().unwrap())
+        .map(|()| log::set_max_level(log::LevelFilter::Info))
+        .unwrap();
 
     // TODO move things in main out to other files
     let db_pool = rustrat_server::persistence::prepare_database_pool("rustrat.db")
@@ -79,23 +78,71 @@ pub async fn main() {
         });
     }
 
+    // TODO handle C-c (shutdown), destroy sqlite objects etc
+    tokio::spawn(async move {
+        core_task.run().await;
+    });
+
+    // GUI code
+    let (finished_tx, finished_rx) = tokio::sync::oneshot::channel();
+
+    let (gui_tx, gui_rx) = tokio::sync::mpsc::channel(128);
+
     {
         let db_pool = db_pool.clone();
-        tokio::spawn(async move {
-            tokio::signal::ctrl_c().await.unwrap();
-            log::info!("Received signal to shut down, shutting down");
+        std::thread::spawn(move || {
+            badtui::gui::Gui::run(gui_rx).unwrap();
 
-            // TODO shut down tasks
-
-            // TODO figure out what is up with sqlite timing out when starting rustrat-server
             drop(db_pool.writer);
             drop(db_pool.reader);
 
-            // TODO don't exit()? Possible if tasks are shut down?
-            std::process::exit(0);
+            finished_tx.send(()).unwrap();
         });
     }
 
-    // TODO handle C-c (shutdown), destroy sqlite objects etc
-    core_task.run().await;
+    {
+        // Draw task
+        let gui_tx = gui_tx.clone();
+
+        tokio::spawn(async move {
+            let mut interval = time::interval(time::Duration::from_millis(20));
+            interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
+
+            loop {
+                interval.tick().await;
+                if gui_tx.send(badtui::gui::Command::Draw).await.is_err() {
+                    log::debug!("Unable to send draw tick, shutting down task.");
+                    break;
+                }
+            }
+        });
+    }
+
+    {
+        // Input task
+        let gui_tx = gui_tx.clone();
+
+        tokio::spawn(async move {
+            if badtui::input::Input::handle(gui_tx).await.is_err() {
+                log::debug!("Input task returned, shutting down task.");
+            }
+        });
+    }
+
+    {
+        // Task to read logs
+        // TODO is this stupid, first sending to a log channel then just straight to the GUI?
+        let gui_tx = gui_tx.clone();
+
+        tokio::spawn(async move {
+            while let Some(log_msg) = logger_rx.recv().await {
+                gui_tx
+                    .send(badtui::gui::Command::SendOutput(log_msg.msg))
+                    .await
+                    .unwrap();
+            }
+        });
+    }
+
+    finished_rx.await.unwrap();
 }

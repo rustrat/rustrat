@@ -154,7 +154,7 @@ impl runtime::strategy::Strategy for PollingRunner {
                                             &mut common_utils.get_rng(),
                                         )
                                         // Convert to rustrat-client Error enum
-                                        .map_err(|err| Error::from(err))
+                                        .map_err(Error::from)
                                         // Encrypt message
                                         .map(messages::rat_to_server::Message::EncryptedMessage)
                                         // Send message

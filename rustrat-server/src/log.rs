@@ -1,31 +1,23 @@
-use tokio::sync::mpsc;
+use tokio::sync::mpsc::UnboundedSender;
 
 // TODO log time
 
 // TODO hack to get around lifetimes in log::Record, try to send log::Record around instead
 // TODO pass additional fields as needed (for example for storage in database)
-struct Record {
+pub struct Record {
     //level: log::Level,
     //target: String,
-    msg: String,
+    pub msg: String,
 }
 
+#[derive(Debug)]
 pub struct Logger {
-    tx: mpsc::UnboundedSender<Box<Record>>,
+    tx: UnboundedSender<Box<Record>>,
     level: log::Level,
 }
 
 impl Logger {
-    pub fn new(level: log::Level) -> Self {
-        let (tx, mut rx) = mpsc::unbounded_channel::<Box<Record>>();
-
-        // TODO store logs (sqlite?)
-        tokio::spawn(async move {
-            while let Some(entry) = rx.recv().await {
-                println!("{}", entry.msg);
-            }
-        });
-
+    pub fn new(level: log::Level, tx: UnboundedSender<Box<Record>>) -> Self {
         Logger { tx, level }
     }
 }

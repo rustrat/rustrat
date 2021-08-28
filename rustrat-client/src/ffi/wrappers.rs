@@ -211,7 +211,10 @@ unsafe fn do_ffi_call<R>(
     Ok(function.call(&arguments))
 }
 
-fn wasm_cstr_to_str<'callcontext>(cc: &'callcontext wasm3::CallContext, str_ptr: u32) -> Result<&'callcontext str> {
+fn wasm_cstr_to_str<'callcontext>(
+    cc: &'callcontext wasm3::CallContext,
+    str_ptr: u32,
+) -> Result<&'callcontext str> {
     let out;
     unsafe {
         let mem = cc.memory() as *const _ as *const i8;

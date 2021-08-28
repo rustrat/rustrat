@@ -3,6 +3,8 @@ pub enum Error {
     PublicKeyDoesNotExist,
     DecryptionError,
     UnknownEnumValue,
+    CommunicationError,
+    DbError,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
