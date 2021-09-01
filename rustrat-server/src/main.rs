@@ -130,6 +130,20 @@ pub async fn main() {
     }
 
     {
+        // Task to get rats/print new output
+        let gui_tx = gui_tx.clone();
+        let db_pool = db_pool.clone();
+
+        tokio::spawn(async move {
+            let watcher = badtui::watcher::Watcher::new(gui_tx, db_pool);
+            match watcher.run().await {
+                Ok(_) => unreachable!(),
+                Err(_) => log::error!("Watcher task returned error, shutting down task."),
+            }
+        });
+    }
+
+    {
         // Task to read logs
         // TODO is this stupid, first sending to a log channel then just straight to the GUI?
         let gui_tx = gui_tx.clone();

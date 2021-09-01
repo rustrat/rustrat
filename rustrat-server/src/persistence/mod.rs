@@ -77,6 +77,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     sqlx::query(
         "
 CREATE TABLE IF NOT EXISTS jobs_output (
+    output_id INTEGER PRIMARY KEY NOT NULL,
     job_id INTEGER NOT NULL,
     output TEXT NOT NULL,
     created DATETIME NOT NULL,

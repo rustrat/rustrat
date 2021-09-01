@@ -99,8 +99,6 @@ impl Gui {
 
             let list_block = Block::default().title("Rats").borders(Borders::ALL);
 
-            f.render_widget(list_block, list_area);
-
             // This will fail when provided something more fancy than ascii and I am okay with that for now
             let mut display_slice: &str = &state.input;
             while display_slice.len() > (input_area.width as usize - 3) {
@@ -131,6 +129,14 @@ impl Gui {
                 .block(output_block)
                 .start_corner(Corner::BottomLeft);
 
+            let rats: Vec<ListItem> = state
+                .rats
+                .iter()
+                .map(|rat| ListItem::new(rat.as_ref()))
+                .collect();
+            let rat_list = List::new(rats).block(list_block);
+
+            f.render_widget(rat_list, list_area);
             f.render_widget(input, input_area);
             f.render_widget(message_list, output_area);
 

@@ -87,7 +87,7 @@ impl Input {
 
         tokio::spawn(async move {
             match &cmd_parts[0].to_lowercase() as &str {
-                "quit" => {
+                "quit" | "exit" => {
                     log::info!("Shutting down server");
                     gui_tx.send(Command::Quit).await.unwrap();
                 }
