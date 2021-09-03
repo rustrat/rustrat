@@ -36,6 +36,16 @@
       ]
     }
   },
+  "44bcf1dbeb4055c3bca5b5d52cae10c3cead548df0c24a1af8a182e5b3595c9f": {
+    "query": "INSERT INTO jobs (rat_id, created, last_update, started, done, job_type, payload) VALUES (?, datetime('now'), datetime('now'), false, false, 'exit', '');",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Right": 1
+      },
+      "nullable": []
+    }
+  },
   "48e44ffc17d87e2d9a8535f0b458f5dd0ad1fce5c1eb08b6b1f298a0f997b97a": {
     "query": "SELECT public_key FROM rats WHERE alive = true",
     "describe": {

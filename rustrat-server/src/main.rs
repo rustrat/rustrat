@@ -121,9 +121,10 @@ pub async fn main() {
     {
         // Input task
         let gui_tx = gui_tx.clone();
+        let db_pool = db_pool.clone();
 
         tokio::spawn(async move {
-            if badtui::input::Input::handle(gui_tx).await.is_err() {
+            if badtui::input::Input::handle(gui_tx, db_pool).await.is_err() {
                 log::debug!("Input task returned, shutting down task.");
             }
         });
