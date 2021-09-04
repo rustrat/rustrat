@@ -285,6 +285,8 @@ impl CoreTask {
                         .await
                         .unwrap();
 
+                        transaction.commit().await.unwrap();
+
                         self.send_encrypted_response(
                             server_to_rat::Response::Nop,
                             reply_channel,
@@ -315,6 +317,8 @@ impl CoreTask {
                         .await
                         .unwrap();
 
+                        transaction.commit().await.unwrap();
+
                         self.send_encrypted_response(
                             server_to_rat::Response::Nop,
                             reply_channel,
@@ -341,6 +345,8 @@ impl CoreTask {
                             .await
                             .unwrap();
 
+                        transaction.commit().await.unwrap();
+
                         self.send_encrypted_response(
                             server_to_rat::Response::Nop,
                             reply_channel,
@@ -366,6 +372,8 @@ impl CoreTask {
                             .execute(&mut transaction)
                             .await
                             .unwrap();
+
+                        transaction.commit().await.unwrap();
 
                         self.send_encrypted_response(
                             server_to_rat::Response::Nop,
