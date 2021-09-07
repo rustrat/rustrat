@@ -147,7 +147,12 @@ impl Input {
                                     ).execute(&db_pool.writer).await;
 
                                     if result.is_ok() {
-                                        log::info!("Tasked rat {} to execute function {} from {}", rat_id, cmd_parts[3], cmd_parts[2]);
+                                        log::info!(
+                                            "Tasked rat {} to execute function {} from {}",
+                                            rat_id,
+                                            cmd_parts[3],
+                                            cmd_parts[2]
+                                        );
                                     } else {
                                         log::info!("Unable to store job in database, are you sure you entered the correct id?");
                                     }
