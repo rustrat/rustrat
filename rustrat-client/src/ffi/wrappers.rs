@@ -155,6 +155,20 @@ pub fn link_ffi_bindings(
         )
         .or_else(not_found_is_okay)?;
 
+    // TODO return u32 when compiled for 32 bit?
+    module
+        .link_closure(
+            "rustrat",
+            "ptr_to_native",
+            move |cc, (ptr,): (u32,)| -> u64 {
+                let ptr =
+                    unsafe { (cc.memory_mut() as *mut _ as *mut u8).offset(ptr as isize) as usize };
+
+                ptr as u64
+            },
+        )
+        .or_else(not_found_is_okay)?;
+
     Ok(())
 }
 
